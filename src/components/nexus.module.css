@@ -67,6 +67,8 @@
 .accountAccess > div:first-child, .accountForm { display: grid; gap: var(--space-xs); }
 .accountAccess small { color: var(--color-text-muted); line-height: 1.45; }
 .accountMode { display: grid !important; grid-template-columns: 1fr 1fr; gap: var(--space-xs); margin-bottom: var(--space-xs); }
+.accountForgot { justify-self: center; padding: 2px 4px; color: var(--color-brand); border: 0; background: transparent; cursor: pointer; font-size: 12px; }
+.accountForgot:hover { text-decoration: underline; }
 
 .appShell {
   display: grid;
@@ -177,6 +179,8 @@
 .chatMessage header strong { font-size: 14px; }
 .chatMessage time { color: var(--color-text-muted); font-size: 11px; }
 .chatMessage p { margin-top: 3px; color: var(--color-text-secondary); line-height: 1.55; overflow-wrap: anywhere; white-space: pre-wrap; }
+.chatMessage p a { color: var(--color-link); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+.chatMessage p a:hover { color: var(--color-link-hover); }
 .chatComposer { display: flex; gap: var(--space-sm); align-items: center; padding: var(--space-sm) var(--space-md) var(--space-md); border-top: 1px solid var(--color-border); background: var(--color-bg-panel); }
 .chatComposer :global(.ant-input) { resize: none; }
 .newMessages { position: absolute; right: var(--space-lg); bottom: 80px; z-index: 2; padding: 7px 12px; color: var(--color-bg-base); border: 0; border-radius: 999px; background: var(--color-brand); box-shadow: var(--shadow-elevated); cursor: pointer; font-size: 12px; font-weight: 600; }
@@ -193,6 +197,9 @@
 .threadCard { display: inline-flex; gap: var(--space-sm); align-items: center; margin-top: var(--space-xs); padding: var(--space-sm); color: var(--color-text-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-elevated); }
 .threadCard > span { display: flex; flex-direction: column; }
 .modalForm { display: grid; gap: var(--space-sm); }
+.emojiPicker { display: grid; grid-template-columns: repeat(4, 42px); gap: 4px; }
+.emojiButton { display: grid; width: 42px; height: 42px; place-items: center; color: var(--color-text-primary); border: 1px solid transparent; border-radius: var(--radius-md); background: transparent; cursor: pointer; font-size: 23px; }
+.emojiButton:hover { border-color: var(--color-border); background: var(--color-bg-hover); }
 
 .voiceStage { height: 100%; min-height: 0; padding: var(--space-md); overflow: auto; background: var(--color-bg-base); }
 .focusStage { position: relative; display: grid; height: calc(100% - 112px); min-height: 260px; place-items: center; overflow: hidden; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-bg-base); }

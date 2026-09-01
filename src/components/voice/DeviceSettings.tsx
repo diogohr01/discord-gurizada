@@ -1,6 +1,6 @@
 "use client";
 
-import { DesktopOutlined, EyeOutlined, InfoCircleOutlined } from "@ant-design/icons";
+import { BellOutlined, DesktopOutlined, EyeOutlined, InfoCircleOutlined, SoundOutlined } from "@ant-design/icons";
 import { Alert, Select, Switch, Tabs } from "antd";
 import { useEffect, useRef, useState } from "react";
 
@@ -21,11 +21,15 @@ interface DeviceSettingsProps {
   supportsAudioOutput: boolean;
   presenceStatus: PresenceStatus;
   shareActivity: boolean;
+  notificationSoundEnabled?: boolean;
+  mentionNotificationsEnabled?: boolean;
   onClose: () => void;
   onRefresh: () => Promise<void>;
   onChange: (kind: MediaDeviceKind, deviceId: string) => Promise<boolean>;
   onPresence: (status: PresenceStatus) => Promise<void>;
   onActivitySharing: (enabled: boolean) => void;
+  onNotificationSoundChange?: (enabled: boolean) => void;
+  onMentionNotificationsChange?: (enabled: boolean) => void | Promise<void>;
   avatarUrl?: string;
   onAvatarChange?: (file: File) => Promise<void>;
 }
@@ -41,6 +45,10 @@ export function DeviceSettings({
   onChange,
   onPresence,
   onActivitySharing,
+  notificationSoundEnabled = true,
+  mentionNotificationsEnabled = false,
+  onNotificationSoundChange = () => undefined,
+  onMentionNotificationsChange = async () => undefined,
   avatarUrl,
   onAvatarChange = async () => undefined,
 }: DeviceSettingsProps) {
@@ -132,6 +140,31 @@ export function DeviceSettings({
           onChange={onActivitySharing}
         />
       </div>
+      <div className={styles.activityPreference}>
+        <span className={styles.activityPreferenceIcon}><SoundOutlined /></span>
+        <span className={styles.activityPreferenceText}>
+          <strong>Som de novas mensagens</strong>
+          <small>Reproduz um aviso quando chegar uma mensagem direta ou em um canal.</small>
+        </span>
+        <Switch
+          aria-label="Som de novas mensagens"
+          checked={notificationSoundEnabled}
+          onChange={onNotificationSoundChange}
+        />
+      </div>
+      <div className={styles.activityPreference}>
+        <span className={styles.activityPreferenceIcon}><BellOutlined /></span>
+        <span className={styles.activityPreferenceText}>
+          <strong>Notificar minhas menções</strong>
+          <small>Mostra uma notificação do sistema quando alguém usar seu nome no chat.</small>
+        </span>
+        <Switch
+          aria-label="Notificar minhas menções"
+          checked={mentionNotificationsEnabled}
+          onChange={(enabled) => void onMentionNotificationsChange(enabled)}
+        />
+      </div>
+      <p className={styles.settingsNote}>As notificações do computador também dependem da permissão do navegador.</p>
       <div className={styles.desktopActivityNote}>
         <DesktopOutlined />
         <span>

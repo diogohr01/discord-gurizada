@@ -8,7 +8,7 @@ import {
   SendOutlined,
   SmileOutlined,
 } from "@ant-design/icons";
-import { Dropdown, Input } from "antd";
+import { Dropdown, Input, Mentions, Popover } from "antd";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
@@ -47,6 +47,11 @@ function MessageText({ text }: { text: string }) {
   return <>{parts.length ? parts : text}</>;
 }
 
+const emojis = [
+  "\u{1F600}", "\u{1F602}", "\u{1F60D}", "\u{1F44D}", "\u{1F44F}", "\u{1F525}",
+  "\u{1F389}", "\u{2764}\u{FE0F}", "\u{1F605}", "\u{1F914}", "\u{1F60E}", "\u{1F64F}",
+] as const;
+
 interface ChatPanelProps {
   target: ChatTarget;
   messages: ChatMessage[];
@@ -54,14 +59,17 @@ interface ChatPanelProps {
   onSendFile: (target: ChatTarget, file: File) => Promise<void>;
   onSendPoll: (target: ChatTarget, question: string, options: string[]) => Promise<void>;
   channelName?: string;
+  members?: Array<{ identity: string; name: string }>;
+  selfIdentity?: string;
 }
 
-export function ChatPanel({ target, messages, onSend, onSendFile, onSendPoll, channelName }: ChatPanelProps) {
+export function ChatPanel({ target, messages, onSend, onSendFile, onSendPoll, channelName, members = [], selfIdentity }: ChatPanelProps) {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [nearBottom, setNearBottom] = useState(true);
   const [newCount, setNewCount] = useState(0);
   const [pollOpen, setPollOpen] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const [question, setQuestion] = useState("");
   const [pollOptions, setPollOptions] = useState(["", ""]);
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +78,24 @@ export function ChatPanel({ target, messages, onSend, onSendFile, onSendPoll, ch
   const fileRef = useRef<HTMLInputElement>(null);
   const previousCount = useRef(0);
   const title = target.type === "dm" ? target.name : `#${channelName || "canal"}`;
+  const mentionOptions = useMemo(() => members
+    .filter((member) => member.identity !== selfIdentity)
+    .map((member) => ({ key: member.identity, value: member.name, label: member.name })), [members, selfIdentity]);
+  const emojiPicker = (
+    <div className={styles.emojiPicker} role="group" aria-label="Emotes">
+      {emojis.map((emoji) => (
+        <button
+          key={emoji}
+          type="button"
+          className={styles.emojiButton}
+          aria-label={`Adicionar ${emoji}`}
+          onClick={() => setDraft((current) => `${current}${emoji}`)}
+        >
+          {emoji}
+        </button>
+      ))}
+    </div>
+  );
   const visibleMessages = useMemo(() => messages.filter((message) => target.type === "channel"
     ? message.channelId === target.channelId
     : message.dmIdentity === target.identity), [messages, target]);
@@ -168,30 +194,40 @@ export function ChatPanel({ target, messages, onSend, onSendFile, onSendPoll, ch
       )}
       <div className={styles.chatComposer}>
         <input ref={fileRef} className={styles.fileInput} type="file" onChange={(event) => void chooseFile(event.target.files?.[0])} />
-        <Dropdown
-          trigger={["click"]}
-          menu={{
-            items: [
-              { key: "file", icon: <FileAddOutlined />, label: "Enviar arquivo" },
-              { type: "divider" as const },
-              ...["😀", "😂", "😍", "👍", "👏", "🔥", "🎉", "❤️", "😅", "🤔", "😎", "🙏"].map((emoji, index) => ({ key: `emoji:${emoji}`, icon: index === 0 ? <SmileOutlined /> : undefined, label: emoji })),
-              { key: "poll", icon: <BarChartOutlined />, label: "Criar enquete", disabled: target.type === "dm" },
-            ].filter((item) => item.key !== "thread"),
-            onClick: ({ key }) => {
-              if (key === "file") fileRef.current?.click();
-              if (key === "poll") setPollOpen(true);
-              if (key.startsWith("emoji:")) setDraft((current) => `${current}${key.slice(6)}`);
-            },
-          }}
+        <Popover
+          title="Emotes"
+          placement="topLeft"
+          trigger={[]}
+          open={emojiOpen}
+          onOpenChange={setEmojiOpen}
+          content={emojiPicker}
         >
-          <AppIconButton label="Mais ações" icon={<PlusOutlined />} />
-        </Dropdown>
-        <Input.TextArea
+          <Dropdown
+            trigger={["click"]}
+            menu={{
+              items: [
+                { key: "file", icon: <FileAddOutlined />, label: "Enviar arquivo" },
+                { key: "emoji", icon: <SmileOutlined />, label: "Abrir emotes" },
+                { key: "poll", icon: <BarChartOutlined />, label: "Criar enquete", disabled: target.type === "dm" },
+              ].filter((item) => item.key !== "thread"),
+              onClick: ({ key }) => {
+                if (key === "file") fileRef.current?.click();
+                if (key === "emoji") setEmojiOpen(true);
+                if (key === "poll") setPollOpen(true);
+              },
+            }}
+          >
+            <AppIconButton label="Mais ações" icon={<PlusOutlined />} />
+          </Dropdown>
+        </Popover>
+        <Mentions
           aria-label={`Mensagem em ${title}`}
           value={draft}
-          onChange={(event) => setDraft(event.target.value)}
+          onChange={(value) => setDraft(value)}
           onPaste={pasteFile}
           onPressEnter={(event) => { if (!event.shiftKey) { event.preventDefault(); void send(); } }}
+          options={mentionOptions}
+          prefix="@"
           autoSize={{ minRows: 1, maxRows: 5 }}
           placeholder={`Conversar em ${title}`}
           maxLength={2000}

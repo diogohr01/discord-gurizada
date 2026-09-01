@@ -39,6 +39,8 @@ const cssVariables = {
   "--color-brand-soft": colors.brand.soft,
   "--color-brand-faint": colors.brand.faint,
   "--color-brand-ghost": colors.brand.ghost,
+  "--color-link": colors.link.primary,
+  "--color-link-hover": colors.link.hover,
   "--color-online": colors.status.online,
   "--color-warning": colors.status.warning,
   "--color-danger": colors.status.danger,

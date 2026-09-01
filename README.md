@@ -32,6 +32,7 @@ NEXT_PUBLIC_APP_NAME=Discord da Gurizada
 NEXT_PUBLIC_SUPABASE_URL=https://seu-projeto.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 SUPABASE_SECRET_KEY=sb_secret_... # recomendado no servidor; nunca exponha
+NEXT_PUBLIC_SITE_URL=https://discord-gurizada.vercel.app
 ```
 
 Somente `NEXT_PUBLIC_APP_NAME` é exposta no bundle. As outras variáveis são lidas exclusivamente no Route Handler.
@@ -121,6 +122,8 @@ O `AGENTS.md` descreve quando cada um deve ser usado. A skill oficial do Ant Des
 ## Publicar gratuitamente na Vercel
 
 Antes do deploy, execute a migration no projeto Supabase e cadastre `SUPABASE_SECRET_KEY` como variável sensível no projeto Vercel. As variáveis `NEXT_PUBLIC_*` são públicas; não coloque secret/service keys em componentes client.
+
+No Supabase, em Authentication → URL Configuration, use `https://discord-gurizada.vercel.app` como Site URL e adicione `https://discord-gurizada.vercel.app/**` aos Redirect URLs. No Vercel, defina `NEXT_PUBLIC_SITE_URL` com a mesma URL.
 
 1. Faça login com `npx.cmd vercel login`.
 2. Na raiz, execute `npx.cmd vercel` para criar/vincular o projeto.

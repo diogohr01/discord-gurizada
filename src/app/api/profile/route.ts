@@ -17,14 +17,24 @@ function failure(status: number, code: string, message: string) {
   return NextResponse.json({ code, message }, { status });
 }
 
+function profileKeys(session: Awaited<ReturnType<typeof getCurrentSession>>): string[] {
+  if (!session) return [];
+  return [...new Set([session.identity, session.accountId, session.displayName].filter((value): value is string => Boolean(value)))];
+}
+
+async function findProfile(client: ReturnType<typeof createSupabaseDataClient>, session: NonNullable<Awaited<ReturnType<typeof getCurrentSession>>>) {
+  const keys = profileKeys(session);
+  const result = await client.from("profiles").select("profile_key, avatar_path").in("profile_key", keys);
+  if (result.error) throw result.error;
+  return keys.map((key) => result.data.find((profile) => profile.profile_key === key)).find(Boolean) || null;
+}
+
 async function profileForSession() {
   const session = await getCurrentSession();
   if (!session) return null;
-  const profileKey = session.accountId || session.displayName;
   const client = createSupabaseDataClient();
-  const result = await client.from("profiles").select("avatar_path").eq("profile_key", profileKey).maybeSingle();
-  if (result.error) throw result.error;
-  const path = result.data?.avatar_path;
+  const profile = await findProfile(client, session);
+  const path = profile?.avatar_path;
   if (!path) return { session, avatarUrl: null as string | null };
   const signed = await client.storage.from(PROFILE_BUCKET).createSignedUrl(path, 60 * 60 * 24 * 7);
   if (signed.error) throw signed.error;
@@ -54,9 +64,8 @@ export async function POST(request: Request) {
     }
 
     const client = createSupabaseDataClient();
-    const profileKey = session.accountId || session.displayName;
-    const previous = await client.from("profiles").select("avatar_path").eq("profile_key", profileKey).maybeSingle();
-    if (previous.error) throw previous.error;
+    const profileKey = session.identity;
+    const previous = await findProfile(client, session);
     const path = `${profileKey}/${randomUUID()}.${EXTENSIONS[file.type]}`;
     const upload = await client.storage.from(PROFILE_BUCKET).upload(path, await file.arrayBuffer(), {
       contentType: file.type,
@@ -74,7 +83,7 @@ export async function POST(request: Request) {
       await client.storage.from(PROFILE_BUCKET).remove([path]);
       throw saved.error;
     }
-    if (previous.data?.avatar_path) await client.storage.from(PROFILE_BUCKET).remove([previous.data.avatar_path]);
+    if (previous?.avatar_path) await client.storage.from(PROFILE_BUCKET).remove([previous.avatar_path]);
 
     const signed = await client.storage.from(PROFILE_BUCKET).createSignedUrl(path, 60 * 60 * 24 * 7);
     if (signed.error) throw signed.error;

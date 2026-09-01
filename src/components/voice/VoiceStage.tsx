@@ -1,9 +1,9 @@
 "use client";
 
-import { DesktopOutlined, FullscreenOutlined, PictureOutlined, PushpinOutlined, UserOutlined } from "@ant-design/icons";
+import { DesktopOutlined, FullscreenExitOutlined, FullscreenOutlined, PictureOutlined, PushpinOutlined, UserOutlined } from "@ant-design/icons";
 import { RoomAudioRenderer, VideoTrack } from "@livekit/components-react";
 import { Track, type Participant, type Room, type TrackPublication } from "livekit-client";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import styles from "@/components/nexus.module.css";
 import { AppAvatar, AppIconButton, EmptyState } from "@/design-system";
@@ -18,8 +18,27 @@ export function VoiceStage({ room, participants, tracks, deafened }: { room: Roo
   const screenTracks = useMemo(() => tracks.filter((item) => item.source === Track.Source.ScreenShare), [tracks]);
   const cameraTracks = useMemo(() => tracks.filter((item) => item.source === Track.Source.Camera), [tracks]);
   const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const stageRef = useRef<HTMLDivElement>(null);
   const focused = screenTracks.find((item) => item.publication.trackSid === focusedId) || screenTracks.at(-1);
+
+  useEffect(() => {
+    const syncFullscreenState = () => setIsFullscreen(document.fullscreenElement === stageRef.current);
+    document.addEventListener("fullscreenchange", syncFullscreenState);
+    syncFullscreenState();
+    return () => document.removeEventListener("fullscreenchange", syncFullscreenState);
+  }, []);
+
+  async function toggleFullscreen() {
+    const stage = stageRef.current;
+    if (!stage) return;
+    try {
+      if (document.fullscreenElement === stage) await document.exitFullscreen();
+      else await stage.requestFullscreen();
+    } catch {
+      // The browser can reject fullscreen when it was not triggered by a user action.
+    }
+  }
 
   if (!room) {
     return <EmptyState icon={<UserOutlined />} title="Escolha um canal de voz" description="O microfone só será solicitado quando você entrar em uma sala." />;
@@ -48,7 +67,12 @@ export function VoiceStage({ room, participants, tracks, deafened }: { room: Roo
                 icon={<PushpinOutlined />}
                 onClick={() => setFocusedId((current) => current ? null : focused.publication.trackSid)}
               />
-              <AppIconButton label="Tela cheia" icon={<FullscreenOutlined />} onClick={() => void stageRef.current?.requestFullscreen()} />
+              <AppIconButton
+                label={isFullscreen ? "Sair da tela cheia" : "Tela cheia"}
+                icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
+                active={isFullscreen}
+                onClick={() => void toggleFullscreen()}
+              />
             </div>
           </div>
           <div className={styles.voiceThumbnails}>

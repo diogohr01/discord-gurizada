@@ -11,6 +11,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const FILE_BUCKET = "chat-files";
+const PROFILE_BUCKET = "profile-avatars";
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_MESSAGES_PER_QUERY = 500;
 
@@ -28,6 +29,11 @@ interface MessageRow {
   file_size: number | null;
   storage_path: string | null;
   created_at: string;
+}
+
+interface ProfileRow {
+  profile_key: string;
+  avatar_path: string | null;
 }
 
 function failure(status: number, code: string, message: string) {
@@ -51,7 +57,13 @@ async function signedUrl(path: string | null): Promise<string> {
   return data?.signedUrl || "";
 }
 
-async function toChatMessage(row: MessageRow, viewerIdentity: string): Promise<ChatMessage> {
+async function signedProfileUrl(path: string | null): Promise<string> {
+  if (!path) return "";
+  const { data } = await createSupabaseDataClient().storage.from(PROFILE_BUCKET).createSignedUrl(path, 60 * 60 * 24);
+  return data?.signedUrl || "";
+}
+
+async function toChatMessage(row: MessageRow, viewerIdentity: string, avatarUrls: ReadonlyMap<string, string> = new Map()): Promise<ChatMessage> {
   const fileUrl = await signedUrl(row.storage_path);
   const dmIdentity = row.dm_identity
     ? row.author_identity === viewerIdentity ? row.dm_identity : row.author_identity
@@ -62,6 +74,7 @@ async function toChatMessage(row: MessageRow, viewerIdentity: string): Promise<C
     dmIdentity,
     identity: row.author_identity,
     author: row.author_name,
+    authorAvatarUrl: avatarUrls.get(row.author_identity) || undefined,
     text: row.text,
     timestamp: Date.parse(row.created_at),
     kind: row.kind,
@@ -99,7 +112,25 @@ export async function GET() {
     const rows = uniqueRows([
       ...(channels.data || []), ...(sentDms.data || []), ...(receivedDms.data || []),
     ] as MessageRow[]);
-    const messages = await Promise.all(rows.map((row) => toChatMessage(row, session.identity)));
+    const profileKeys = [...new Set(rows.flatMap((row) => [
+      row.author_identity,
+      row.author_name,
+      row.author_identity.startsWith("account_") ? row.author_identity.slice("account_".length) : "",
+    ]).filter(Boolean))];
+    const profiles = profileKeys.length
+      ? await client.from("profiles").select("profile_key, avatar_path").in("profile_key", profileKeys)
+      : { data: [], error: null };
+    if (profiles.error) throw profiles.error;
+    const avatarEntries = await Promise.all((profiles.data as ProfileRow[]).map(async (profile) => [profile.profile_key, await signedProfileUrl(profile.avatar_path)] as const));
+    const avatarByProfileKey = new Map(avatarEntries.filter(([, url]) => Boolean(url)));
+    const avatarUrls = new Map(rows.map((row) => [
+      row.author_identity,
+      avatarByProfileKey.get(row.author_identity)
+        || avatarByProfileKey.get(row.author_name)
+        || avatarByProfileKey.get(row.author_identity.startsWith("account_") ? row.author_identity.slice("account_".length) : "")
+        || "",
+    ]));
+    const messages = await Promise.all(rows.map((row) => toChatMessage(row, session.identity, avatarUrls)));
     return NextResponse.json({ messages }, { headers: { "Cache-Control": "no-store" } });
   } catch (cause) {
     console.error("Message history failed", cause);

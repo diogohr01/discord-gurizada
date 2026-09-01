@@ -22,6 +22,10 @@ export const colors = {
     faint: "rgba(69, 214, 198, 0.015)",
     ghost: "rgba(69, 214, 198, 0.01)",
   },
+  link: {
+    primary: "#4da3ff",
+    hover: "#80c0ff",
+  },
   status: {
     online: "#45d6a7",
     warning: "#f4be65",

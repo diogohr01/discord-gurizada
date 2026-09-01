@@ -8,7 +8,7 @@ import styles from "@/components/nexus.module.css";
 import { NexusMark } from "@/components/brand/NexusBrand";
 import { appConfig } from "@/config/app";
 import { AppButton, AppModal, Surface } from "@/design-system";
-import { getStoredAccountToken, signInAccount, signUpAccount } from "@/services/auth/account.service";
+import { getStoredAccountToken, requestPasswordReset, signInAccount, signUpAccount } from "@/services/auth/account.service";
 
 export function ServerEntry({
   onEnter,
@@ -25,6 +25,7 @@ export function ServerEntry({
   const [accountMode, setAccountMode] = useState<"login" | "signup">("login");
   const [accountSubmitting, setAccountSubmitting] = useState(false);
   const [accountMessage, setAccountMessage] = useState<string | null>(null);
+  const [accountEmail, setAccountEmail] = useState("");
   const enterAccount = onAccountEnter || (async () => undefined);
 
   async function submit(values: { nickname: string; accessCode: string }) {
@@ -60,6 +61,23 @@ export function ServerEntry({
       await enterAccount(accessToken);
     } catch (cause) {
       setAccountMessage(cause instanceof Error ? cause.message : "Não foi possível acessar a conta.");
+    } finally {
+      setAccountSubmitting(false);
+    }
+  }
+
+  async function forgotPassword() {
+    if (!accountEmail.trim()) {
+      setAccountMessage("Informe seu e-mail antes de pedir a recuperação.");
+      return;
+    }
+    setAccountSubmitting(true);
+    setAccountMessage(null);
+    try {
+      await requestPasswordReset(accountEmail.trim());
+      setAccountMessage("Se esse e-mail estiver cadastrado, enviaremos um link para criar uma nova senha.");
+    } catch (cause) {
+      setAccountMessage(cause instanceof Error ? cause.message : "Não foi possível enviar o e-mail de recuperação.");
     } finally {
       setAccountSubmitting(false);
     }
@@ -119,10 +137,11 @@ export function ServerEntry({
               {accountMessage && <Alert type="info" showIcon title={accountMessage} />}
               <Form layout="vertical" requiredMark={false} onFinish={submitAccount} autoComplete="on">
                 {accountMode === "signup" && <Form.Item label="Usuário" name="username" rules={[{ required: true, min: 2, max: 32, message: "Escolha um usuário entre 2 e 32 caracteres." }]}><Input prefix={<UserOutlined />} placeholder="diogo" maxLength={32} /></Form.Item>}
-                <Form.Item label="E-mail" name="email" rules={[{ required: true, type: "email", message: "Informe um e-mail válido." }]}><Input placeholder="voce@email.com" /></Form.Item>
+                <Form.Item label="E-mail" name="email" rules={[{ required: true, type: "email", message: "Informe um e-mail válido." }]}><Input placeholder="voce@email.com" onChange={(event) => setAccountEmail(event.target.value)} /></Form.Item>
                 <Form.Item label="Senha" name="password" rules={[{ required: true, min: 6, message: "Use pelo menos 6 caracteres." }]}><Input.Password prefix={<LockOutlined />} /></Form.Item>
                 {accountMode === "signup" && <Form.Item label="Código do servidor" name="accessCode" rules={[{ required: true, message: "Informe o código privado." }]}><Input.Password prefix={<LockOutlined />} /></Form.Item>}
                 <AppButton variant="primary" htmlType="submit" block loading={accountSubmitting}>{accountMode === "signup" ? "Criar conta" : "Entrar com conta"}</AppButton>
+                {accountMode === "login" && <button type="button" className={styles.accountForgot} onClick={() => void forgotPassword()}>Esqueci minha senha</button>}
               </Form>
             </section>
           )}

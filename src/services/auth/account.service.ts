@@ -21,6 +21,11 @@ function getBrowserClient() {
   return browserClient;
 }
 
+function siteUrl(path = "") {
+  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/, "");
+  return `${configured || window.location.origin}${path}`;
+}
+
 async function saveAccountProfile(session: Session, username: string, accessCode: string) {
   const response = await fetch("/api/account/profile", {
     method: "POST",
@@ -32,7 +37,7 @@ async function saveAccountProfile(session: Session, username: string, accessCode
 }
 
 export async function signUpAccount(email: string, username: string, password: string, accessCode: string) {
-  const { data, error } = await getBrowserClient().auth.signUp({ email, password });
+  const { data, error } = await getBrowserClient().auth.signUp({ email, password, options: { emailRedirectTo: siteUrl("/") } });
   if (error) throw error;
   if (!data.session) return { needsConfirmation: true };
   await saveAccountProfile(data.session, username, accessCode);
@@ -48,6 +53,16 @@ export async function signInAccount(email: string, password: string): Promise<st
 export async function getStoredAccountToken(): Promise<string | null> {
   const { data } = await getBrowserClient().auth.getSession();
   return data.session?.access_token || null;
+}
+
+export async function requestPasswordReset(email: string) {
+  const { error } = await getBrowserClient().auth.resetPasswordForEmail(email, { redirectTo: siteUrl("/reset-password") });
+  if (error) throw error;
+}
+
+export async function updateAccountPassword(password: string) {
+  const { error } = await getBrowserClient().auth.updateUser({ password });
+  if (error) throw error;
 }
 
 export async function getAccountRealtimeToken(accessToken: string): Promise<TokenSuccess> {

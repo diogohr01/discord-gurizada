@@ -17,7 +17,7 @@ import {
   VideoCameraOutlined,
 } from "@ant-design/icons";
 import { Alert, Drawer, Dropdown } from "antd";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import styles from "@/components/nexus.module.css";
 import { AdminPanel } from "@/components/admin/AdminPanel";
@@ -49,10 +49,14 @@ export function AppShell({ realtime }: { realtime: Realtime }) {
       ? realtime.voiceChannels.find((channel) => channel.id === realtime.voiceChannelId)?.name || "Chamada"
       : "Chamada";
 
-  const messagesByChannel = useMemo(() => Object.fromEntries(realtime.textChannels.map((channel) => [
-    channel.id,
-    realtime.messages.filter((message) => message.channelId === channel.id).length,
-  ])), [realtime.messages, realtime.textChannels]);
+  const messagesByChannel = useMemo(() => {
+    const counts: Record<string, number> = Object.fromEntries(realtime.textChannels.map((channel) => [channel.id, 0]));
+    for (const message of realtime.messages) {
+      const key = message.channelId || (message.dmIdentity ? `dm:${message.dmIdentity}` : "");
+      if (key) counts[key] = (counts[key] || 0) + 1;
+    }
+    return counts;
+  }, [realtime.messages, realtime.textChannels]);
 
   async function chooseVoice(channelId: VoiceChannelId) {
     setError(null);
@@ -120,6 +124,8 @@ export function AppShell({ realtime }: { realtime: Realtime }) {
               target={target}
               channelName={target.type === "channel" ? realtime.textChannels.find((channel) => channel.id === target.channelId)?.name : undefined}
               messages={realtime.messages}
+              members={realtime.members}
+              selfIdentity={realtime.user?.identity}
               onSend={realtime.sendMessage}
               onSendFile={realtime.sendFile}
               onSendPoll={realtime.sendPoll}
@@ -141,11 +147,15 @@ export function AppShell({ realtime }: { realtime: Realtime }) {
         supportsAudioOutput={realtime.supportsAudioOutput}
         presenceStatus={realtime.presenceStatus}
         shareActivity={realtime.shareActivity}
+        notificationSoundEnabled={realtime.notificationSoundEnabled}
+        mentionNotificationsEnabled={realtime.mentionNotificationsEnabled}
         onClose={() => setSettingsOpen(false)}
         onRefresh={realtime.refreshDevices}
         onChange={realtime.switchDevice}
         onPresence={realtime.updatePresence}
         onActivitySharing={realtime.updateActivitySharing}
+        onNotificationSoundChange={realtime.updateNotificationSound}
+        onMentionNotificationsChange={realtime.updateMentionNotifications}
         avatarUrl={realtime.user?.avatarUrl}
         onAvatarChange={realtime.updateProfileAvatar}
       />
@@ -177,6 +187,15 @@ function ChannelSidebarContent({ realtime, target, messageCounts, onText, onMemb
   const [seenCounts, setSeenCounts] = useState<Record<string, number>>({});
   const directMembers = realtime.members.filter((member) => member.identity !== realtime.user?.identity);
   const currentVoice = realtime.voiceChannels.find((channel) => channel.id === realtime.voiceChannelId);
+  const currentTargetKey = target.type === "channel" ? target.channelId : `dm:${target.identity}`;
+
+  useEffect(() => {
+    const count = messageCounts[currentTargetKey] || 0;
+    const frame = window.requestAnimationFrame(() => {
+      setSeenCounts((current) => current[currentTargetKey] === count ? current : { ...current, [currentTargetKey]: count });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [currentTargetKey, messageCounts]);
   const statusItems: { key: PresenceStatus; label: string }[] = [
     { key: "online", label: "Online" },
     { key: "idle", label: "Ausente" },
@@ -201,7 +220,7 @@ function ChannelSidebarContent({ realtime, target, messageCounts, onText, onMemb
               key={channel.id}
               channel={channel}
               selected={target.type === "channel" && target.channelId === channel.id}
-              unread={target.type === "channel" && target.channelId === channel.id ? 0 : Math.max(0, (messageCounts[channel.id] || 0) - (seenCounts[channel.id] || 0))}
+              unread={Math.max(0, (messageCounts[channel.id] || 0) - (seenCounts[channel.id] || 0))}
               onClick={() => {
                 setSeenCounts((current) => ({ ...current, [channel.id]: messageCounts[channel.id] || 0 }));
                 onText(channel.id);
@@ -225,12 +244,18 @@ function ChannelSidebarContent({ realtime, target, messageCounts, onText, onMemb
         {directMembers.length > 0 && (
           <div className={styles.channelSection}>
             <div className={styles.sectionLabel}>MENSAGENS DIRETAS</div>
-            {directMembers.map((member) => (
-              <button key={member.identity} className={`${styles.directMessageItem} ${target.type === "dm" && target.identity === member.identity ? styles.channelItemSelected : ""}`} onClick={() => onMember(member)}>
+            {directMembers.map((member) => {
+              const key = `dm:${member.identity}`;
+              const unread = Math.max(0, (messageCounts[key] || 0) - (seenCounts[key] || 0));
+              return <button key={member.identity} className={`${styles.directMessageItem} ${target.type === "dm" && target.identity === member.identity ? styles.channelItemSelected : ""}`} onClick={() => {
+                setSeenCounts((current) => ({ ...current, [key]: messageCounts[key] || 0 }));
+                onMember(member);
+              }}>
                 <span className={styles.memberAvatarWrap}><AppAvatar name={member.name} src={member.avatarUrl} size={28} /><StatusDot status={member.status === "idle" ? "warning" : member.status === "dnd" ? "danger" : member.status === "invisible" ? "offline" : "online"} /></span>
                 <span>{member.name}</span>
-              </button>
-            ))}
+                {Boolean(unread) && <span className={styles.unreadBadge}>{unread}</span>}
+              </button>;
+            })}
           </div>
         )}
       </AppScrollArea>

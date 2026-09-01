@@ -43,6 +43,8 @@ const DM_TOPIC = "chat:dm:v1";
 const FILE_TOPIC = "chat:file:v1";
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const ACTIVITY_PREFERENCE_KEY = "discord-gurizada:share-activity";
+const NOTIFICATION_SOUND_PREFERENCE_KEY = "discord-gurizada:notification-sound";
+const MENTION_NOTIFICATION_PREFERENCE_KEY = "discord-gurizada:mention-notifications";
 
 function toNexusConnectionState(state: ConnectionState): NexusConnectionState {
   switch (state) {
@@ -72,6 +74,20 @@ function initialActivityPreference(): boolean {
   catch { return false; }
 }
 
+function initialNotificationSoundPreference(): boolean {
+  if (typeof window === "undefined") return true;
+  try { return window.localStorage.getItem(NOTIFICATION_SOUND_PREFERENCE_KEY) !== "false"; }
+  catch { return true; }
+}
+
+function initialMentionNotificationPreference(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(MENTION_NOTIFICATION_PREFERENCE_KEY) === "true"
+      && (!("Notification" in window) || window.Notification.permission === "granted");
+  } catch { return false; }
+}
+
 function playJoinSound() {
   if (typeof window === "undefined") return;
   const context = new window.AudioContext();
@@ -90,6 +106,39 @@ function playJoinSound() {
   window.setTimeout(() => void context.close(), 600);
 }
 
+function playMessageNotificationSound() {
+  if (typeof window === "undefined" || !window.AudioContext) return;
+  try {
+    const context = new window.AudioContext();
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0.0001, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.055, context.currentTime + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.24);
+    gain.connect(context.destination);
+    [660, 880].forEach((frequency, index) => {
+      const oscillator = context.createOscillator();
+      oscillator.type = "sine";
+      oscillator.frequency.value = frequency;
+      oscillator.connect(gain);
+      oscillator.start(context.currentTime + index * 0.07);
+      oscillator.stop(context.currentTime + 0.18 + index * 0.07);
+    });
+    window.setTimeout(() => void context.close(), 500);
+  } catch {
+    // Browsers can block audio until the user has interacted with the page.
+  }
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function mentionsName(text: string, name: string): boolean {
+  const normalizedName = name.trim();
+  if (!normalizedName) return false;
+  return new RegExp(`(^|\\s)@${escapeRegExp(normalizedName)}(?=\\s|$|[.,!?])`, "iu").test(text);
+}
+
 export function useNexusRealtime() {
   const [lobbyRoom] = useState(() => new Room({ adaptiveStream: true, dynacast: true }));
   const [voiceRoom, setVoiceRoom] = useState<Room | null>(null);
@@ -105,14 +154,51 @@ export function useNexusRealtime() {
   const [deafened, setDeafened] = useState(false);
   const [presenceStatus, setPresenceStatus] = useState<PresenceStatus>("online");
   const [shareActivity, setShareActivity] = useState(initialActivityPreference);
+  const [notificationSoundEnabled, setNotificationSoundEnabled] = useState(initialNotificationSoundPreference);
+  const [mentionNotificationsEnabled, setMentionNotificationsEnabled] = useState(initialMentionNotificationPreference);
   const [devices, setDevices] = useState<MediaDeviceLists>(emptyDevices);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [serverConfig, setServerConfig] = useState<ServerConfiguration>({
     textChannels: defaultTextChannels.map((channel) => ({ ...channel })),
     voiceChannels: defaultVoiceChannels.map((channel) => ({ ...channel })),
   });
+  const notificationSoundRef = useRef(notificationSoundEnabled);
+  const mentionNotificationsRef = useRef(mentionNotificationsEnabled);
+  const userRef = useRef(user);
+  const messagesRef = useRef<ChatMessage[]>([]);
+  const historyLoadedRef = useRef(false);
 
   const refresh = useCallback(() => setRevision((value) => value + 1), []);
+
+  useEffect(() => { notificationSoundRef.current = notificationSoundEnabled; }, [notificationSoundEnabled]);
+  useEffect(() => { mentionNotificationsRef.current = mentionNotificationsEnabled; }, [mentionNotificationsEnabled]);
+  useEffect(() => { userRef.current = user; }, [user]);
+
+  const notifyIncomingMessage = useCallback((message: ChatMessage) => {
+    if (message.identity === lobbyRoom.localParticipant.identity) return;
+    if (notificationSoundRef.current) playMessageNotificationSound();
+
+    if (!mentionNotificationsRef.current || !("Notification" in window) || window.Notification.permission !== "granted") return;
+    const names = [lobbyRoom.localParticipant.name, userRef.current?.displayName].filter((name): name is string => Boolean(name));
+    if (!names.some((name) => mentionsName(message.text, name))) return;
+    new window.Notification(`Você foi mencionado por ${message.author}`, {
+      body: message.text.slice(0, 180),
+      tag: `mention:${message.id}`,
+    });
+  }, [lobbyRoom]);
+
+  const mergeMessagesIntoState = useCallback((incoming: ChatMessage[], notify = false) => {
+    const current = messagesRef.current;
+    const novel = incoming.filter((message) => !current.some((item) => item.id === message.id));
+    if (notify) novel.forEach((message) => notifyIncomingMessage(message));
+    const next = mergeMessages(current, incoming);
+    messagesRef.current = next;
+    setMessages(next);
+  }, [notifyIncomingMessage]);
+
+  const appendIncomingMessage = useCallback((message: ChatMessage) => {
+    mergeMessagesIntoState([message], true);
+  }, [mergeMessagesIntoState]);
 
   useEffect(() => {
     const fileUrls = fileUrlsRef.current;
@@ -139,7 +225,7 @@ export function useNexusRealtime() {
           try { poll = JSON.parse(text) as ChatMessage["poll"]; } catch { return; }
         }
         const messageId = reader.info.attributes?.messageId || reader.info.id;
-        setMessages((current) => current.some((message) => message.id === messageId) ? current : [...current, {
+        appendIncomingMessage({
           id: messageId,
           channelId: channel.id,
           identity: participantInfo.identity,
@@ -149,7 +235,7 @@ export function useNexusRealtime() {
           timestamp: reader.info.timestamp || Date.now(),
           kind: poll ? "poll" : kind === "thread" ? "thread" : "text",
           poll,
-        }]);
+        });
       });
     }
 
@@ -157,7 +243,7 @@ export function useNexusRealtime() {
       const text = await reader.readAll();
       const participant = lobbyRoom.remoteParticipants.get(participantInfo.identity);
       const messageId = reader.info.attributes?.messageId || reader.info.id;
-      setMessages((current) => current.some((message) => message.id === messageId) ? current : [...current, {
+      appendIncomingMessage({
         id: messageId,
         dmIdentity: participantInfo.identity,
         identity: participantInfo.identity,
@@ -166,7 +252,7 @@ export function useNexusRealtime() {
         text,
         timestamp: reader.info.timestamp || Date.now(),
         kind: reader.info.attributes?.kind === "thread" ? "thread" : "text",
-      }]);
+      });
     });
 
     lobbyRoom.registerByteStreamHandler(FILE_TOPIC, async (reader, participantInfo) => {
@@ -178,7 +264,7 @@ export function useNexusRealtime() {
       const targetType = reader.info.attributes?.targetType;
       const targetId = reader.info.attributes?.targetId;
       const messageId = reader.info.attributes?.messageId || reader.info.id;
-      setMessages((current) => current.some((message) => message.id === messageId) ? current : [...current, {
+      appendIncomingMessage({
         id: messageId,
         channelId: targetType === "channel" ? targetId as TextChannelId : undefined,
         dmIdentity: targetType === "dm" ? participantInfo.identity : undefined,
@@ -189,7 +275,7 @@ export function useNexusRealtime() {
         timestamp: reader.info.timestamp || Date.now(),
         kind: "file",
         file: { name: reader.info.name, mimeType: reader.info.mimeType, size: blob.size, url },
-      }]);
+      });
     });
 
     return () => {
@@ -205,7 +291,7 @@ export function useNexusRealtime() {
       fileUrls.forEach((url) => URL.revokeObjectURL(url));
       lobbyRoom.disconnect();
     };
-  }, [lobbyRoom, refresh]);
+  }, [appendIncomingMessage, lobbyRoom, refresh]);
 
   useEffect(() => {
     if (!user) return;
@@ -229,7 +315,10 @@ export function useNexusRealtime() {
     const load = async () => {
       try {
         const persisted = await getPersistedMessages();
-        if (active) setMessages((current) => mergeMessages(current, persisted));
+        if (active) {
+          mergeMessagesIntoState(persisted, historyLoadedRef.current);
+          historyLoadedRef.current = true;
+        }
       } catch {
         // LiveKit remains available if the database is briefly unavailable.
       }
@@ -237,7 +326,7 @@ export function useNexusRealtime() {
     void load();
     const interval = window.setInterval(() => void load(), 5000);
     return () => { active = false; window.clearInterval(interval); };
-  }, [user]);
+  }, [mergeMessagesIntoState, user]);
 
   useEffect(() => {
     const defaultTopics = new Set<string>(defaultTextChannels.map((channel) => channel.topic));
@@ -247,7 +336,7 @@ export function useNexusRealtime() {
         const text = await reader.readAll();
         const participant = lobbyRoom.remoteParticipants.get(participantInfo.identity);
         const messageId = reader.info.attributes?.messageId || reader.info.id;
-        setMessages((current) => current.some((message) => message.id === messageId) ? current : [...current, {
+        appendIncomingMessage({
           id: messageId,
           channelId: channel.id,
           identity: participantInfo.identity,
@@ -256,11 +345,11 @@ export function useNexusRealtime() {
           text,
           timestamp: reader.info.timestamp || Date.now(),
           kind: reader.info.attributes?.kind === "thread" ? "thread" : "text",
-        }]);
+        });
       });
     }
     return () => { for (const channel of dynamicChannels) lobbyRoom.unregisterTextStreamHandler(channel.topic); };
-  }, [lobbyRoom, serverConfig.textChannels]);
+  }, [appendIncomingMessage, lobbyRoom, serverConfig.textChannels]);
 
   useEffect(() => {
     voiceRoomRef.current = voiceRoom;
@@ -445,8 +534,8 @@ export function useNexusRealtime() {
       attributes: { kind, messageId: saved.id },
     });
     void info;
-    setMessages((current) => mergeMessages(current, [{ ...saved, authorAvatarUrl: user.avatarUrl }]));
-  }, [lobbyRoom, serverConfig.textChannels, user]);
+    mergeMessagesIntoState([{ ...saved, authorAvatarUrl: user.avatarUrl }]);
+  }, [lobbyRoom, mergeMessagesIntoState, serverConfig.textChannels, user]);
 
   const sendPoll = useCallback(async (target: ChatTarget, question: string, options: string[]) => {
     if (target.type !== "channel" || !user || lobbyRoom.state !== ConnectionState.Connected) return;
@@ -455,8 +544,8 @@ export function useNexusRealtime() {
     if (!channel || !poll.question || poll.options.length < 2) return;
     const saved = await persistMessage(target, poll.question, "poll", poll);
     await lobbyRoom.localParticipant.sendText(JSON.stringify(poll), { topic: channel.topic, attributes: { kind: "poll", messageId: saved.id } });
-    setMessages((current) => mergeMessages(current, [{ ...saved, authorAvatarUrl: user.avatarUrl }]));
-  }, [lobbyRoom, serverConfig.textChannels, user]);
+    mergeMessagesIntoState([{ ...saved, authorAvatarUrl: user.avatarUrl }]);
+  }, [lobbyRoom, mergeMessagesIntoState, serverConfig.textChannels, user]);
 
   const sendFile = useCallback(async (target: ChatTarget, file: File) => {
     if (!user || lobbyRoom.state !== ConnectionState.Connected) return;
@@ -473,12 +562,12 @@ export function useNexusRealtime() {
     const url = URL.createObjectURL(file);
     fileUrlsRef.current.push(url);
     void info;
-    setMessages((current) => mergeMessages(current, [{
+    mergeMessagesIntoState([{
       ...saved,
       authorAvatarUrl: user.avatarUrl,
       file: saved.file ? { ...saved.file, url } : saved.file,
-    }]));
-  }, [lobbyRoom, user]);
+    }]);
+  }, [lobbyRoom, mergeMessagesIntoState, user]);
 
   const updatePresence = useCallback(async (status: PresenceStatus) => {
     setPresenceStatus(status);
@@ -488,6 +577,37 @@ export function useNexusRealtime() {
   const updateActivitySharing = useCallback((enabled: boolean) => {
     setShareActivity(enabled);
     try { window.localStorage.setItem(ACTIVITY_PREFERENCE_KEY, String(enabled)); }
+    catch { /* Private browsing can disable local storage. */ }
+  }, []);
+
+  const updateNotificationSound = useCallback((enabled: boolean) => {
+    notificationSoundRef.current = enabled;
+    setNotificationSoundEnabled(enabled);
+    try { window.localStorage.setItem(NOTIFICATION_SOUND_PREFERENCE_KEY, String(enabled)); }
+    catch { /* Private browsing can disable local storage. */ }
+  }, []);
+
+  const updateMentionNotifications = useCallback(async (enabled: boolean) => {
+    if (!enabled) {
+      mentionNotificationsRef.current = false;
+      setMentionNotificationsEnabled(false);
+      try { window.localStorage.setItem(MENTION_NOTIFICATION_PREFERENCE_KEY, "false"); }
+      catch { /* Private browsing can disable local storage. */ }
+      return;
+    }
+    if (!("Notification" in window)) return;
+    let permission: NotificationPermission;
+    try {
+      permission = window.Notification.permission === "granted"
+        ? "granted"
+        : await window.Notification.requestPermission();
+    } catch {
+      permission = "denied";
+    }
+    const allowed = permission === "granted";
+    mentionNotificationsRef.current = allowed;
+    setMentionNotificationsEnabled(allowed);
+    try { window.localStorage.setItem(MENTION_NOTIFICATION_PREFERENCE_KEY, String(allowed)); }
     catch { /* Private browsing can disable local storage. */ }
   }, []);
 
@@ -548,6 +668,8 @@ export function useNexusRealtime() {
     await clearRealtimeSession();
     if (accountSession) await signOutAccount();
     setUser(null);
+    messagesRef.current = [];
+    historyLoadedRef.current = false;
     setMessages([]);
     setLobbyState("offline");
   }, [leaveVoice, lobbyRoom, user?.accountId]);
@@ -560,8 +682,12 @@ export function useNexusRealtime() {
     videoTracks, messages, media, deafened, setDeafened, presenceStatus,
     activity: shareActivity ? automaticActivity : "",
     shareActivity,
+    notificationSoundEnabled,
+    mentionNotificationsEnabled,
     updatePresence,
     updateActivitySharing,
+    updateNotificationSound,
+    updateMentionNotifications,
     mediaError, clearMediaError: () => setMediaError(null), devices,
     supportsAudioOutput: typeof document !== "undefined" && supportsAudioOutputSelection(),
     connect, connectAccount, disconnect, joinVoice, leaveVoice, sendMessage, sendPoll, sendFile, updateProfileAvatar,
