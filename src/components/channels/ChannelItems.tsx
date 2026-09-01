@@ -41,7 +41,7 @@ export function VoiceChannelItem({ channel, selected, connecting, members, onCli
       </button>
       {members.map((member) => (
         <div className={styles.voiceMember} key={member.identity}>
-          <AppAvatar name={member.name} size={22} />
+          <AppAvatar name={member.name} src={member.avatarUrl} size={22} />
           <span>{member.name}</span>
           {member.isScreenSharing && <DesktopOutlined title="Compartilhando tela" />}
           {member.isMicrophoneMuted && <AudioMutedOutlined title="Microfone desativado" />}

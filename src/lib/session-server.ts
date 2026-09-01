@@ -11,4 +11,3 @@ export async function getCurrentSession(): Promise<SessionPayload | null> {
   const cookieStore = await cookies();
   return verifySession(cookieStore.get(SESSION_COOKIE_NAME)?.value, secret);
 }
-

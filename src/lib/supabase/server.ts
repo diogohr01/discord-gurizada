@@ -36,14 +36,18 @@ export async function createSupabaseServerClient() {
 }
 
 /** Server-only data client. Prefer a secret/service key in production; the publishable key keeps the MVP usable locally. */
-export function createSupabaseDataClient() {
+export function createSupabaseDataClient(accessToken?: string) {
   const key = process.env.SUPABASE_SECRET_KEY?.trim()
     || process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
     || publishableKey();
 
   return createClient(supabaseUrl(), key, {
     auth: { autoRefreshToken: false, persistSession: false },
-    global: { headers: { "x-application-name": "discord-gurizada" } },
+    global: {
+      headers: {
+        "x-application-name": "discord-gurizada",
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
+    },
   });
 }
-

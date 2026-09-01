@@ -36,6 +36,12 @@ SUPABASE_SECRET_KEY=sb_secret_... # recomendado no servidor; nunca exponha
 
 Somente `NEXT_PUBLIC_APP_NAME` é exposta no bundle. As outras variáveis são lidas exclusivamente no Route Handler.
 
+## Contas e sessão persistente
+
+As contas usam Supabase Auth com persistência no armazenamento local do navegador. Para habilitar o cadastro, aplique também `supabase/migrations/0002_profile_avatars.sql` e `supabase/migrations/0003_user_accounts.sql`. O cadastro pede e-mail, usuário, senha e o código privado uma única vez; depois a sessão é restaurada automaticamente neste navegador.
+
+O chat transforma URLs `http`/`https` em links clicáveis, aceita colar imagens e arquivos com `Ctrl+V` e oferece emojis no botão `+`.
+
 ## Executar
 
 ```bash
@@ -126,8 +132,8 @@ Nunca envie `.env.local`, chaves LiveKit ou o código do grupo ao Git.
 
 ## Limitações atuais
 
-- Sem conta individual: a identidade continua sendo uma sessão anônima baseada em nickname e expira em 12 horas.
-- DMs antigas não são reabertas automaticamente após uma nova sessão, porque a identidade LiveKit é renovada a cada entrada; mensagens públicas têm histórico persistente.
+- O acesso sem conta continua sendo uma sessão anônima baseada em nickname e expira em 12 horas; contas Supabase restauram a entrada neste navegador.
+- DMs de contas são recuperadas pelo histórico do Supabase; sessões anônimas continuam renovando a identidade LiveKit a cada entrada.
 - Mensagens privadas só chegam enquanto as duas pessoas estão conectadas ao mesmo lobby.
 - Votos de enquete são locais nesta versão; a publicação da pergunta e opções é realtime.
 - Voz e presença continuam dependentes do LiveKit; o Supabase é a fonte de verdade dos dados persistentes, não o transporte realtime.

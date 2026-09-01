@@ -42,6 +42,30 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["chat_messages"]["Insert"]>;
         Relationships: [];
       };
+      profiles: {
+        Row: {
+          profile_key: string;
+          display_name: string;
+          avatar_path: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<Database["public"]["Tables"]["profiles"]["Row"], "created_at" | "updated_at"> & { created_at?: string; updated_at?: string };
+        Update: Partial<Database["public"]["Tables"]["profiles"]["Insert"]>;
+        Relationships: [];
+      };
+      users: {
+        Row: {
+          id: string;
+          email: string;
+          username: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<Database["public"]["Tables"]["users"]["Row"], "created_at" | "updated_at"> & { created_at?: string; updated_at?: string };
+        Update: Partial<Database["public"]["Tables"]["users"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -49,4 +73,3 @@ export interface Database {
     CompositeTypes: Record<string, never>;
   };
 }
-

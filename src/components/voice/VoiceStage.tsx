@@ -86,7 +86,7 @@ function ParticipantPlaceholder({ participant, large = false }: { participant: P
   const name = participant.name || participant.identity;
   return (
     <div className={`${large ? styles.participantTile : styles.participantMini} ${participant.isSpeaking ? styles.participantSpeaking : ""}`}>
-      <AppAvatar name={name} size={large ? 68 : 34} />
+      <AppAvatar name={name} src={participant.attributes.avatarUrl} size={large ? 68 : 34} />
       <span>{name}</span>
       {participant.isSpeaking && <small>falando</small>}
     </div>

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { createLobbyToken, createVoiceToken } from "@/lib/livekit/server";
 import { isConfiguredVoiceChannel } from "@/lib/server-state";
+import { createSupabaseDataClient } from "@/lib/supabase/server";
 import {
   createIdentity,
   safeSecretEqual,
@@ -45,6 +46,32 @@ export async function POST(request: Request) {
 
   try {
     const { accessCode, sessionSecret, adminToken } = serverSecrets();
+    if (body.action === "account") {
+      if (typeof body.accessToken !== "string" || !body.accessToken) return error(401, "AUTH_REQUIRED", "Entre com sua conta primeiro.");
+      const client = createSupabaseDataClient(body.accessToken);
+      const auth = await client.auth.getUser(body.accessToken);
+      if (auth.error || !auth.data.user?.id) return error(401, "AUTH_REQUIRED", "A sessão da conta expirou.");
+      const account = await client.from("users").select("id, username").eq("id", auth.data.user.id).maybeSingle();
+      if (account.error) throw account.error;
+      if (!account.data) return error(403, "ACCOUNT_NOT_READY", "Essa conta ainda não foi preparada para este servidor.");
+      const session: SessionPayload = {
+        identity: `account_${account.data.id}`,
+        displayName: account.data.username,
+        role: "member",
+        accountId: account.data.id,
+        expiresAt: Date.now() + SESSION_MAX_AGE_SECONDS * 1000,
+      };
+      const response = NextResponse.json(await createLobbyToken(session));
+      response.cookies.set(SESSION_COOKIE_NAME, signSession(session, sessionSecret), {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: SESSION_MAX_AGE_SECONDS,
+        priority: "high",
+      });
+      return response;
+    }
     if (body.action === "enter") {
       const nickname = validateNickname(body.nickname);
       if (

@@ -16,12 +16,15 @@ export interface NexusUser {
   identity: string;
   displayName: string;
   role: "member" | "admin";
+  avatarUrl?: string;
+  accountId?: string;
 }
 
 export type PresenceStatus = "online" | "idle" | "dnd" | "invisible";
 
 export type TokenRequest =
   | { action: "enter"; nickname: string; accessCode: string; adminToken?: string }
+  | { action: "account"; accessToken: string }
   | { action: "voice"; channelId: VoiceChannelId };
 
 export interface TokenSuccess {
@@ -42,6 +45,7 @@ export interface ChatMessage {
   dmIdentity?: string;
   identity: string;
   author: string;
+  authorAvatarUrl?: string;
   text: string;
   timestamp: number;
   kind?: "text" | "file" | "poll" | "thread";

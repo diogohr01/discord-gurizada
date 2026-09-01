@@ -6,10 +6,11 @@ import {
   FileAddOutlined,
   PlusOutlined,
   SendOutlined,
-  WechatWorkOutlined,
+  SmileOutlined,
 } from "@ant-design/icons";
 import { Dropdown, Input } from "antd";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import styles from "@/components/nexus.module.css";
 import { AppAvatar, AppButton, AppIconButton, AppModal, AppScrollArea, EmptyState } from "@/design-system";
@@ -28,6 +29,24 @@ function formatDate(timestamp: number) {
   return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "long", year: "numeric" }).format(new Date(timestamp));
 }
 
+function MessageText({ text }: { text: string }) {
+  const parts: ReactNode[] = [];
+  const pattern = /https?:\/\/[^\s]+?(?=https?:\/\/|\s|$)/gi;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(text))) {
+    const rawUrl = match[0];
+    const url = rawUrl.replace(/[.,!?;:)\]}]+$/g, "");
+    const trailing = rawUrl.slice(url.length);
+    if (match.index > cursor) parts.push(text.slice(cursor, match.index));
+    parts.push(<a key={`${url}-${match.index}`} href={url} target="_blank" rel="noreferrer noopener">{url}</a>);
+    if (trailing) parts.push(trailing);
+    cursor = match.index + rawUrl.length;
+  }
+  if (cursor < text.length) parts.push(text.slice(cursor));
+  return <>{parts.length ? parts : text}</>;
+}
+
 interface ChatPanelProps {
   target: ChatTarget;
   messages: ChatMessage[];
@@ -43,10 +62,8 @@ export function ChatPanel({ target, messages, onSend, onSendFile, onSendPoll, ch
   const [nearBottom, setNearBottom] = useState(true);
   const [newCount, setNewCount] = useState(0);
   const [pollOpen, setPollOpen] = useState(false);
-  const [threadOpen, setThreadOpen] = useState(false);
   const [question, setQuestion] = useState("");
   const [pollOptions, setPollOptions] = useState(["", ""]);
-  const [threadTitle, setThreadTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [votes, setVotes] = useState<Record<string, number>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -70,7 +87,8 @@ export function ChatPanel({ target, messages, onSend, onSendFile, onSendPoll, ch
     const text = draft.trim();
     if (!text || sending) return;
     setSending(true);
-    try { await onSend(target, text); setDraft(""); }
+    try { setError(null); await onSend(target, text); setDraft(""); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível enviar a mensagem."); }
     finally { setSending(false); }
   }
 
@@ -82,9 +100,17 @@ export function ChatPanel({ target, messages, onSend, onSendFile, onSendPoll, ch
     if (fileRef.current) fileRef.current.value = "";
   }
 
+  function pasteFile(event: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const pastedFile = Array.from(event.clipboardData.items)
+      .find((item) => item.kind === "file")?.getAsFile() || event.clipboardData.files[0];
+    if (!pastedFile) return;
+    event.preventDefault();
+    void chooseFile(pastedFile);
+  }
+
   return (
     <section className={styles.chatPanel} aria-label={`Conversa ${title}`}>
-      <div className={styles.chatNotice}>{error || "Mensagens e arquivos ficam somente na memória desta sessão."}</div>
+      {error && <div className={styles.chatError} role="alert">{error}</div>}
       <AppScrollArea
         className={styles.chatMessages}
         ref={scrollRef}
@@ -98,7 +124,7 @@ export function ChatPanel({ target, messages, onSend, onSendFile, onSendPoll, ch
         {visibleMessages.length === 0 ? (
           <EmptyState
             title={target.type === "dm" ? `Comece uma conversa com ${target.name}` : `Comece a conversa em ${title}`}
-            description={target.type === "dm" ? "Esta mensagem será entregue somente a vocês enquanto ambos estiverem online." : "Todo mundo conectado ao servidor verá as mensagens em tempo real."}
+            description={target.type === "dm" ? "Esta conversa é privada e fica disponível no histórico da sessão." : "Todo mundo conectado ao servidor verá as mensagens em tempo real."}
           />
         ) : visibleMessages.map((message, index) => {
           const showDate = index === 0 || dateKey(message.timestamp) !== dateKey(visibleMessages[index - 1].timestamp);
@@ -106,7 +132,7 @@ export function ChatPanel({ target, messages, onSend, onSendFile, onSendPoll, ch
             <Fragment key={message.id}>
               {showDate && <div className={styles.dateSeparator}><span>{formatDate(message.timestamp)}</span></div>}
               <article className={styles.chatMessage}>
-                <AppAvatar name={message.author} size={38} />
+                <AppAvatar name={message.author} src={message.authorAvatarUrl} size={38} />
                 <div>
                   <header><strong>{message.author}</strong><time dateTime={new Date(message.timestamp).toISOString()}>{formatTime(message.timestamp)}</time></header>
                   {message.kind === "file" && message.file ? (
@@ -128,9 +154,7 @@ export function ChatPanel({ target, messages, onSend, onSendFile, onSendPoll, ch
                       ))}
                       <small>Voto local no MVP</small>
                     </div>
-                  ) : message.kind === "thread" ? (
-                    <div className={styles.threadCard}><WechatWorkOutlined /><span><strong>Tópico</strong>{message.text}</span></div>
-                  ) : <p>{message.text}</p>}
+                  ) : <p><MessageText text={message.text} /></p>}
                 </div>
               </article>
             </Fragment>
@@ -149,13 +173,14 @@ export function ChatPanel({ target, messages, onSend, onSendFile, onSendPoll, ch
           menu={{
             items: [
               { key: "file", icon: <FileAddOutlined />, label: "Enviar arquivo" },
-              { key: "thread", icon: <WechatWorkOutlined />, label: "Criar tópico" },
+              { type: "divider" as const },
+              ...["😀", "😂", "😍", "👍", "👏", "🔥", "🎉", "❤️", "😅", "🤔", "😎", "🙏"].map((emoji, index) => ({ key: `emoji:${emoji}`, icon: index === 0 ? <SmileOutlined /> : undefined, label: emoji })),
               { key: "poll", icon: <BarChartOutlined />, label: "Criar enquete", disabled: target.type === "dm" },
-            ],
+            ].filter((item) => item.key !== "thread"),
             onClick: ({ key }) => {
               if (key === "file") fileRef.current?.click();
-              if (key === "thread") setThreadOpen(true);
               if (key === "poll") setPollOpen(true);
+              if (key.startsWith("emoji:")) setDraft((current) => `${current}${key.slice(6)}`);
             },
           }}
         >
@@ -165,6 +190,7 @@ export function ChatPanel({ target, messages, onSend, onSendFile, onSendPoll, ch
           aria-label={`Mensagem em ${title}`}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
+          onPaste={pasteFile}
           onPressEnter={(event) => { if (!event.shiftKey) { event.preventDefault(); void send(); } }}
           autoSize={{ minRows: 1, maxRows: 5 }}
           placeholder={`Conversar em ${title}`}
@@ -173,12 +199,6 @@ export function ChatPanel({ target, messages, onSend, onSendFile, onSendPoll, ch
         <AppButton variant="primary" icon={<SendOutlined />} aria-label="Enviar mensagem" loading={sending} disabled={!draft.trim()} onClick={() => void send()} />
       </div>
 
-      <AppModal title="Criar tópico" open={threadOpen} onCancel={() => setThreadOpen(false)}>
-        <div className={styles.modalForm}>
-          <Input aria-label="Nome do tópico" value={threadTitle} maxLength={100} placeholder="Assunto do tópico" onChange={(event) => setThreadTitle(event.target.value)} />
-          <AppButton variant="primary" disabled={!threadTitle.trim()} onClick={() => { void onSend(target, threadTitle, "thread"); setThreadTitle(""); setThreadOpen(false); }}>Criar tópico</AppButton>
-        </div>
-      </AppModal>
       <AppModal title="Criar enquete" open={pollOpen} onCancel={() => setPollOpen(false)}>
         <div className={styles.modalForm}>
           <Input aria-label="Pergunta da enquete" value={question} maxLength={160} placeholder="Faça uma pergunta" onChange={(event) => setQuestion(event.target.value)} />

@@ -63,6 +63,10 @@
 .secureLabel { display: inline-flex; gap: 6px; align-items: center; letter-spacing: 0; font-weight: 400; }
 .entryAlert { margin-bottom: var(--space-md); }
 .entryFootnote { margin: var(--space-md) auto 0; max-width: 300px; color: var(--color-text-muted); text-align: center; font-size: 12px; line-height: 1.5; }
+.accountAccess { display: grid; gap: var(--space-sm); margin-top: var(--space-lg); padding-top: var(--space-md); border-top: 1px solid var(--color-border); }
+.accountAccess > div:first-child, .accountForm { display: grid; gap: var(--space-xs); }
+.accountAccess small { color: var(--color-text-muted); line-height: 1.45; }
+.accountMode { display: grid !important; grid-template-columns: 1fr 1fr; gap: var(--space-xs); margin-bottom: var(--space-xs); }
 
 .appShell {
   display: grid;
@@ -136,8 +140,8 @@
 .currentUserControls :global(.nexus-icon-button.ant-btn.ant-btn-circle) { inline-size: 30px; min-inline-size: 30px; block-size: 30px; border-radius: 8px; }
 
 .mainColumn { display: flex; min-width: 0; min-height: 0; flex-direction: column; background: var(--color-bg-panel); }
-.topBar { display: flex; gap: var(--space-sm); align-items: center; padding: 0 var(--space-md); border-bottom: 1px solid var(--color-border); background: var(--color-panel-translucent); backdrop-filter: blur(14px); }
-.topBarTitle { display: flex; min-width: 0; flex: 1; gap: var(--space-md); align-items: center; }
+.topBar { display: flex; gap: var(--space-sm); align-items: center; min-height: 44px; padding: 0 var(--space-md); border-bottom: 1px solid var(--color-border); background: var(--color-panel-translucent); backdrop-filter: blur(14px); }
+.topBarTitle { display: flex; min-width: 0; min-height: 44px; flex: 1; gap: var(--space-md); align-items: center; }
 .topBarTitle strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .shellAlert { margin: var(--space-sm) var(--space-md) 0; }
 .mainContent { min-width: 0; min-height: 0; flex: 1; overflow: hidden; }
@@ -163,8 +167,8 @@
 .activityCard strong, .activityCard small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .activityCard small { color: var(--color-brand); font-size: 11px; }
 
-.chatPanel { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; min-height: 0; }
-.chatNotice { padding: 7px var(--space-md); color: var(--color-text-muted); border-bottom: 1px solid var(--color-border); background: var(--color-bg-base); text-align: center; font-size: 11px; }
+.chatPanel { position: relative; display: grid; grid-template-rows: minmax(0, 1fr) auto; height: 100%; min-height: 0; }
+.chatError { position: absolute; top: var(--space-sm); right: var(--space-md); left: var(--space-md); z-index: 2; padding: var(--space-sm); color: var(--color-danger); border: 1px solid var(--color-danger); border-radius: var(--radius-md); background: var(--color-bg-elevated); box-shadow: var(--shadow-elevated); }
 .chatMessages { padding: var(--space-lg); }
 .chatMessage { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-sm); padding: var(--space-sm) 0; }
 .chatMessage + .chatMessage { border-top: 1px solid var(--color-border-translucent); }
@@ -214,6 +218,10 @@
 .voiceControls :global(.ant-btn) { width: 42px; height: 42px; }
 .controlDivider { width: 1px; height: 28px; margin: 0 4px; background: var(--color-border); }
 .settingsBody { display: grid; gap: var(--space-md); }
+.profileAvatarEditor { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-md); align-items: center; padding: var(--space-md); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-bg-elevated); }
+.profileAvatarEditor > div { display: grid; gap: var(--space-xs); }
+.profileAvatarEditor small { color: var(--color-text-muted); line-height: 1.45; }
+.settingsError { color: var(--color-danger) !important; }
 .deviceField { display: grid; gap: var(--space-xs); color: var(--color-text-secondary); font-size: 13px; }
 .deviceField :global(.ant-select) { width: 100%; }
 .mobileDrawer :global(.ant-drawer-body.ant-drawer-body) { padding: 0; }

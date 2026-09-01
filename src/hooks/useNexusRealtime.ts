@@ -12,10 +12,13 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { textChannels as defaultTextChannels, voiceChannels as defaultVoiceChannels, type TextChannelId, type VoiceChannelId } from "@/config/app";
+import { getAccountRealtimeToken, signOutAccount } from "@/services/auth/account.service";
 import { getPersistedMessages, persistFile, persistMessage } from "@/services/chat/chat.service";
+import { getProfile, uploadProfileAvatar } from "@/services/profile/profile.service";
 import { clearRealtimeSession, getRealtimeToken } from "@/services/realtime/realtimeToken.service";
 import { getServerConfiguration as fetchServerConfiguration } from "@/services/server/serverConfig.service";
-import type { ChatMessage, ChatTarget, NexusConnectionState, NexusUser, PresenceStatus, ServerConfiguration } from "@/types/realtime";
+import { measureNetworkLatency } from "@/services/network/network.service";
+import type { ChatMessage, ChatTarget, NexusConnectionState, NexusUser, PresenceStatus, ServerConfiguration, TokenSuccess } from "@/types/realtime";
 
 export interface NexusMember {
   identity: string;
@@ -26,6 +29,7 @@ export interface NexusMember {
   activity: string;
   isMicrophoneMuted: boolean;
   isScreenSharing: boolean;
+  avatarUrl?: string;
 }
 
 export interface MediaDeviceLists {
@@ -94,6 +98,7 @@ export function useNexusRealtime() {
   const [user, setUser] = useState<NexusUser | null>(null);
   const [lobbyState, setLobbyState] = useState<NexusConnectionState>("offline");
   const [voiceState, setVoiceState] = useState<NexusConnectionState>("offline");
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [voiceChannelId, setVoiceChannelId] = useState<VoiceChannelId | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [revision, setRevision] = useState(0);
@@ -139,6 +144,7 @@ export function useNexusRealtime() {
           channelId: channel.id,
           identity: participantInfo.identity,
           author: participant ? participantName(participant) : "Pessoa",
+          authorAvatarUrl: participant?.attributes.avatarUrl || undefined,
           text: poll?.question || text,
           timestamp: reader.info.timestamp || Date.now(),
           kind: poll ? "poll" : kind === "thread" ? "thread" : "text",
@@ -156,6 +162,7 @@ export function useNexusRealtime() {
         dmIdentity: participantInfo.identity,
         identity: participantInfo.identity,
         author: participant ? participantName(participant) : "Pessoa",
+        authorAvatarUrl: participant?.attributes.avatarUrl || undefined,
         text,
         timestamp: reader.info.timestamp || Date.now(),
         kind: reader.info.attributes?.kind === "thread" ? "thread" : "text",
@@ -177,6 +184,7 @@ export function useNexusRealtime() {
         dmIdentity: targetType === "dm" ? participantInfo.identity : undefined,
         identity: participantInfo.identity,
         author: participant ? participantName(participant) : "Pessoa",
+        authorAvatarUrl: participant?.attributes.avatarUrl || undefined,
         text: reader.info.name,
         timestamp: reader.info.timestamp || Date.now(),
         kind: "file",
@@ -244,6 +252,7 @@ export function useNexusRealtime() {
           channelId: channel.id,
           identity: participantInfo.identity,
           author: participant ? participantName(participant) : "Pessoa",
+          authorAvatarUrl: participant?.attributes.avatarUrl || undefined,
           text,
           timestamp: reader.info.timestamp || Date.now(),
           kind: reader.info.attributes?.kind === "thread" ? "thread" : "text",
@@ -289,6 +298,7 @@ export function useNexusRealtime() {
       activity: participant.attributes.activity || "",
       isMicrophoneMuted: participant.attributes.microphoneMuted === "true",
       isScreenSharing: participant.attributes.screenSharing === "true",
+      avatarUrl: participant.attributes.avatarUrl || undefined,
     })).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   }, [lobbyRoom, revision]);
 
@@ -327,20 +337,60 @@ export function useNexusRealtime() {
       .map((publication: TrackPublication) => ({ participant, publication, source: publication.source })));
   }, [revision, voiceParticipants, voiceRoom]);
 
-  const connect = useCallback(async (nickname: string, accessCode: string, adminToken?: string) => {
-    setLobbyState("connecting");
-    const credentials = await getRealtimeToken({ action: "enter", nickname, accessCode, adminToken });
+  const connectWithCredentials = useCallback(async (credentials: TokenSuccess) => {
     setUser(credentials.user);
     try {
       await lobbyRoom.connect(credentials.serverUrl, credentials.participantToken);
-      await lobbyRoom.localParticipant.setAttributes({ status: "online", activity: "", microphoneMuted: "true", screenSharing: "false" });
+      const profile = await getProfile().catch(() => ({ avatarUrl: null }));
+      setUser({ ...credentials.user, avatarUrl: profile.avatarUrl || undefined });
+      await lobbyRoom.localParticipant.setAttributes({ status: "online", activity: "", microphoneMuted: "true", screenSharing: "false", avatarUrl: profile.avatarUrl || "" });
       setLobbyState("connected");
     } catch (cause) {
+      await lobbyRoom.disconnect();
       setUser(null);
       setLobbyState("offline");
       throw cause;
     }
   }, [lobbyRoom]);
+
+  const connect = useCallback(async (nickname: string, accessCode: string, adminToken?: string) => {
+    setLobbyState("connecting");
+    const credentials = await getRealtimeToken({ action: "enter", nickname, accessCode, adminToken });
+    await connectWithCredentials(credentials);
+  }, [connectWithCredentials]);
+
+  const connectAccount = useCallback(async (accessToken: string) => {
+    setLobbyState("connecting");
+    try {
+      await connectWithCredentials(await getAccountRealtimeToken(accessToken));
+    } catch (cause) {
+      setLobbyState("offline");
+      throw cause;
+    }
+  }, [connectWithCredentials]);
+
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    const check = async () => {
+      try {
+        const measured = await measureNetworkLatency();
+        if (active) setLatencyMs(measured);
+      } catch {
+        if (active) setLatencyMs(null);
+      }
+    };
+    void check();
+    const interval = window.setInterval(() => void check(), 5000);
+    return () => { active = false; window.clearInterval(interval); };
+  }, [user]);
+
+  const updateProfileAvatar = useCallback(async (file: File) => {
+    const profile = await uploadProfileAvatar(file);
+    setUser((current) => current ? { ...current, avatarUrl: profile.avatarUrl || undefined } : current);
+    if (lobbyRoom.state === ConnectionState.Connected) await lobbyRoom.localParticipant.setAttributes({ avatarUrl: profile.avatarUrl || "" });
+    refresh();
+  }, [lobbyRoom, refresh]);
 
   const leaveVoice = useCallback(async () => {
     const current = voiceRoomRef.current;
@@ -395,7 +445,7 @@ export function useNexusRealtime() {
       attributes: { kind, messageId: saved.id },
     });
     void info;
-    setMessages((current) => mergeMessages(current, [saved]));
+    setMessages((current) => mergeMessages(current, [{ ...saved, authorAvatarUrl: user.avatarUrl }]));
   }, [lobbyRoom, serverConfig.textChannels, user]);
 
   const sendPoll = useCallback(async (target: ChatTarget, question: string, options: string[]) => {
@@ -405,7 +455,7 @@ export function useNexusRealtime() {
     if (!channel || !poll.question || poll.options.length < 2) return;
     const saved = await persistMessage(target, poll.question, "poll", poll);
     await lobbyRoom.localParticipant.sendText(JSON.stringify(poll), { topic: channel.topic, attributes: { kind: "poll", messageId: saved.id } });
-    setMessages((current) => mergeMessages(current, [saved]));
+    setMessages((current) => mergeMessages(current, [{ ...saved, authorAvatarUrl: user.avatarUrl }]));
   }, [lobbyRoom, serverConfig.textChannels, user]);
 
   const sendFile = useCallback(async (target: ChatTarget, file: File) => {
@@ -425,6 +475,7 @@ export function useNexusRealtime() {
     void info;
     setMessages((current) => mergeMessages(current, [{
       ...saved,
+      authorAvatarUrl: user.avatarUrl,
       file: saved.file ? { ...saved.file, url } : saved.file,
     }]));
   }, [lobbyRoom, user]);
@@ -491,16 +542,19 @@ export function useNexusRealtime() {
   }, []);
 
   const disconnect = useCallback(async () => {
+    const accountSession = Boolean(user?.accountId);
     await leaveVoice();
     await lobbyRoom.disconnect();
     await clearRealtimeSession();
+    if (accountSession) await signOutAccount();
     setUser(null);
     setMessages([]);
     setLobbyState("offline");
-  }, [leaveVoice, lobbyRoom]);
+  }, [leaveVoice, lobbyRoom, user?.accountId]);
 
   return {
     lobbyRoom, voiceRoom, user, lobbyState, voiceState, voiceChannelId, members, voiceParticipants,
+    latencyMs,
     textChannels: serverConfig.textChannels, voiceChannels: serverConfig.voiceChannels,
     refreshServerConfig: async () => setServerConfig(await fetchServerConfiguration()),
     videoTracks, messages, media, deafened, setDeafened, presenceStatus,
@@ -510,7 +564,7 @@ export function useNexusRealtime() {
     updateActivitySharing,
     mediaError, clearMediaError: () => setMediaError(null), devices,
     supportsAudioOutput: typeof document !== "undefined" && supportsAudioOutputSelection(),
-    connect, disconnect, joinVoice, leaveVoice, sendMessage, sendPoll, sendFile,
+    connect, connectAccount, disconnect, joinVoice, leaveVoice, sendMessage, sendPoll, sendFile, updateProfileAvatar,
     toggleMicrophone, toggleCamera, toggleScreenShare, refreshDevices, switchDevice,
   };
 }

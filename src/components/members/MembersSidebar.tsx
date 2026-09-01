@@ -22,7 +22,7 @@ export function MembersSidebar({ members, selfIdentity, onMessage }: { members: 
             <div className={styles.memberSectionLabel}>ATIVIDADES — {activities.length}</div>
             {activities.map((member) => (
               <button className={styles.activityCard} key={member.identity} onClick={() => member.identity !== selfIdentity && onMessage?.(member)}>
-                <AppAvatar name={member.name} size={32} />
+                <AppAvatar name={member.name} src={member.avatarUrl} size={32} />
                 <span><strong>{member.name}</strong><small><RocketOutlined /> {member.activity}</small></span>
               </button>
             ))}
@@ -38,7 +38,7 @@ export function MembersSidebar({ members, selfIdentity, onMessage }: { members: 
             aria-label={member.identity === selfIdentity ? `${member.name}, você` : `Conversar com ${member.name}`}
           >
             <span className={styles.memberAvatarWrap}>
-              <AppAvatar name={member.name} size={34} />
+              <AppAvatar name={member.name} src={member.avatarUrl} size={34} />
               <StatusDot status={member.status === "idle" ? "warning" : member.status === "dnd" ? "danger" : member.status === "invisible" ? "offline" : "online"} />
             </span>
             <span className={styles.memberText}>

@@ -116,6 +116,16 @@ a {
   font-size: 12px;
 }
 
+.connection-status__latency {
+  margin-left: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.connection-status__latency--good { color: var(--color-online); }
+.connection-status__latency--warn { color: var(--color-warning); }
+.connection-status__latency--bad { color: var(--color-danger); }
+.connection-status__latency--unknown { color: var(--color-text-muted); }
+
 .connection-status__dot,
 .status-dot {
   width: 8px;

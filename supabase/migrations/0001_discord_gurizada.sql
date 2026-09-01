@@ -37,14 +37,24 @@ create table if not exists public.chat_messages (
   )
 );
 
+create table if not exists public.profiles (
+  profile_key text primary key check (char_length(profile_key) between 1 and 80),
+  display_name text not null check (char_length(display_name) between 1 and 32),
+  avatar_path text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create index if not exists chat_messages_channel_created_idx on public.chat_messages (channel_id, created_at desc);
 create index if not exists chat_messages_dm_created_idx on public.chat_messages (dm_identity, created_at desc);
 create index if not exists chat_messages_author_dm_created_idx on public.chat_messages (author_identity, dm_identity, created_at desc);
 create index if not exists server_logs_created_idx on public.server_logs (created_at desc);
+create index if not exists profiles_updated_idx on public.profiles (updated_at desc);
 
 alter table public.server_channels enable row level security;
 alter table public.server_logs enable row level security;
 alter table public.chat_messages enable row level security;
+alter table public.profiles enable row level security;
 
 -- The app keeps its own signed session cookie, so the Route Handlers are the
 -- authorization boundary. These policies keep the publishable-key MVP usable;
@@ -59,14 +69,22 @@ create policy "server logs api access" on public.server_logs for all to anon, au
 drop policy if exists "chat messages api access" on public.chat_messages;
 create policy "chat messages api access" on public.chat_messages for all to anon, authenticated using (true) with check (true);
 
+drop policy if exists "profiles api access" on public.profiles;
+create policy "profiles api access" on public.profiles for all to anon, authenticated using (true) with check (true);
+
 grant usage on schema public to anon, authenticated;
 grant select, insert on public.server_channels to anon, authenticated;
 grant select, insert on public.server_logs to anon, authenticated;
 grant select, insert on public.chat_messages to anon, authenticated;
+grant select, insert, update on public.profiles to anon, authenticated;
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('chat-files', 'chat-files', false, 10485760, null)
 on conflict (id) do update set public = false, file_size_limit = 10485760;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('profile-avatars', 'profile-avatars', false, 5242880, ARRAY['image/png', 'image/jpeg', 'image/webp', 'image/gif']::text[])
+on conflict (id) do update set public = false, file_size_limit = 5242880, allowed_mime_types = ARRAY['image/png', 'image/jpeg', 'image/webp', 'image/gif']::text[];
 
 drop policy if exists "chat files api read" on storage.objects;
 create policy "chat files api read" on storage.objects for select to anon, authenticated using (bucket_id = 'chat-files');
@@ -74,4 +92,13 @@ create policy "chat files api read" on storage.objects for select to anon, authe
 drop policy if exists "chat files api upload" on storage.objects;
 create policy "chat files api upload" on storage.objects for insert to anon, authenticated with check (bucket_id = 'chat-files');
 
-grant select, insert on storage.objects to anon, authenticated;
+grant select, insert, delete on storage.objects to anon, authenticated;
+
+drop policy if exists "profile avatars api read" on storage.objects;
+create policy "profile avatars api read" on storage.objects for select to anon, authenticated using (bucket_id = 'profile-avatars');
+
+drop policy if exists "profile avatars api upload" on storage.objects;
+create policy "profile avatars api upload" on storage.objects for insert to anon, authenticated with check (bucket_id = 'profile-avatars');
+
+drop policy if exists "profile avatars api delete" on storage.objects;
+create policy "profile avatars api delete" on storage.objects for delete to anon, authenticated using (bucket_id = 'profile-avatars');

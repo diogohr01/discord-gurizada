@@ -106,7 +106,7 @@ export function AppShell({ realtime }: { realtime: Realtime }) {
           <AppIconButton className={styles.mobileOnly} label="Abrir canais" icon={<MenuOutlined />} onClick={() => setChannelsOpen(true)} />
           <div className={styles.topBarTitle}>
             <strong>{title}</strong>
-            <ConnectionStatus state={view === "voice" ? realtime.voiceState : realtime.lobbyState} />
+            <ConnectionStatus state={view === "voice" ? realtime.voiceState : realtime.lobbyState} latencyMs={realtime.latencyMs} />
           </div>
           <AppIconButton className={styles.mobileOnly} label="Ver participantes" icon={<TeamOutlined />} onClick={() => setMembersOpen(true)} />
         </header>
@@ -146,6 +146,8 @@ export function AppShell({ realtime }: { realtime: Realtime }) {
         onChange={realtime.switchDevice}
         onPresence={realtime.updatePresence}
         onActivitySharing={realtime.updateActivitySharing}
+        avatarUrl={realtime.user?.avatarUrl}
+        onAvatarChange={realtime.updateProfileAvatar}
       />
       {realtime.user?.role === "admin" && (
         <AdminPanel
@@ -225,7 +227,7 @@ function ChannelSidebarContent({ realtime, target, messageCounts, onText, onMemb
             <div className={styles.sectionLabel}>MENSAGENS DIRETAS</div>
             {directMembers.map((member) => (
               <button key={member.identity} className={`${styles.directMessageItem} ${target.type === "dm" && target.identity === member.identity ? styles.channelItemSelected : ""}`} onClick={() => onMember(member)}>
-                <span className={styles.memberAvatarWrap}><AppAvatar name={member.name} size={28} /><StatusDot status={member.status === "idle" ? "warning" : member.status === "dnd" ? "danger" : member.status === "invisible" ? "offline" : "online"} /></span>
+                <span className={styles.memberAvatarWrap}><AppAvatar name={member.name} src={member.avatarUrl} size={28} /><StatusDot status={member.status === "idle" ? "warning" : member.status === "dnd" ? "danger" : member.status === "invisible" ? "offline" : "online"} /></span>
                 <span>{member.name}</span>
               </button>
             ))}
@@ -267,7 +269,7 @@ function ChannelSidebarContent({ realtime, target, messageCounts, onText, onMemb
             }}
           >
             <button className={styles.currentUserAvatar} aria-label="Alterar status">
-              <AppAvatar name={realtime.user?.displayName || "?"} size={38} />
+              <AppAvatar name={realtime.user?.displayName || "?"} src={realtime.user?.avatarUrl} size={38} />
               <StatusDot status={realtime.presenceStatus === "idle" ? "warning" : realtime.presenceStatus === "dnd" ? "danger" : realtime.presenceStatus === "invisible" ? "offline" : "online"} />
             </button>
           </Dropdown>

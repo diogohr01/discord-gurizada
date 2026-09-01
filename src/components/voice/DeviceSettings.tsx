@@ -2,10 +2,10 @@
 
 import { DesktopOutlined, EyeOutlined, InfoCircleOutlined } from "@ant-design/icons";
 import { Alert, Select, Switch, Tabs } from "antd";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import styles from "@/components/nexus.module.css";
-import { AppModal } from "@/design-system";
+import { AppAvatar, AppButton, AppModal } from "@/design-system";
 import type { MediaDeviceLists } from "@/hooks/useNexusRealtime";
 import type { PresenceStatus } from "@/types/realtime";
 
@@ -26,6 +26,8 @@ interface DeviceSettingsProps {
   onChange: (kind: MediaDeviceKind, deviceId: string) => Promise<boolean>;
   onPresence: (status: PresenceStatus) => Promise<void>;
   onActivitySharing: (enabled: boolean) => void;
+  avatarUrl?: string;
+  onAvatarChange?: (file: File) => Promise<void>;
 }
 
 export function DeviceSettings({
@@ -39,8 +41,13 @@ export function DeviceSettings({
   onChange,
   onPresence,
   onActivitySharing,
+  avatarUrl,
+  onAvatarChange = async () => undefined,
 }: DeviceSettingsProps) {
   const [selected, setSelected] = useState<Partial<Record<MediaDeviceKind, string>>>({});
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) void onRefresh();
@@ -70,6 +77,33 @@ export function DeviceSettings({
 
   const profileFields = (
     <div className={styles.settingsBody}>
+      <div className={styles.profileAvatarEditor}>
+        <AppAvatar name="Perfil" src={avatarUrl} size={64} />
+        <div>
+          <strong>Foto do perfil</strong>
+          <small>Escolha uma imagem de até 5 MB para aparecer nas conversas.</small>
+          <input
+            ref={avatarInputRef}
+            className={styles.fileInput}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            onChange={async (event) => {
+              const file = event.target.files?.[0];
+              if (!file) return;
+              setAvatarBusy(true);
+              setAvatarError(null);
+              try { await onAvatarChange(file); }
+              catch (cause) { setAvatarError(cause instanceof Error ? cause.message : "Não foi possível atualizar a foto."); }
+              finally {
+                setAvatarBusy(false);
+                if (avatarInputRef.current) avatarInputRef.current.value = "";
+              }
+            }}
+          />
+          <AppButton size="small" loading={avatarBusy} onClick={() => avatarInputRef.current?.click()}>Escolher foto</AppButton>
+          {avatarError && <small className={styles.settingsError}>{avatarError}</small>}
+        </div>
+      </div>
       <label className={styles.deviceField}>
         <span>Status</span>
         <Select

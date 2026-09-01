@@ -7,8 +7,6 @@ export interface AppAvatarProps extends Omit<AvatarProps, "children"> {
 export function AppAvatar({ name, ...props }: AppAvatarProps) {
   const initial = name.trim().charAt(0).toLocaleUpperCase("pt-BR") || "?";
   return (
-    <Avatar aria-label={`Avatar de ${name}`} {...props}>
-      {initial}
-    </Avatar>
+    <Avatar aria-label={`Avatar de ${name}`} {...props}>{props.src ? undefined : initial}</Avatar>
   );
 }
