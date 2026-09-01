@@ -44,6 +44,15 @@ export async function signUpAccount(email: string, username: string, password: s
   return { needsConfirmation: false };
 }
 
+export async function resendSignupConfirmation(email: string) {
+  const { error } = await getBrowserClient().auth.resend({
+    type: "signup",
+    email,
+    options: { emailRedirectTo: siteUrl("/") },
+  });
+  if (error) throw error;
+}
+
 export async function signInAccount(email: string, password: string): Promise<string> {
   const { data, error } = await getBrowserClient().auth.signInWithPassword({ email, password });
   if (error || !data.session) throw error || new Error("Não foi possível entrar com essa conta.");

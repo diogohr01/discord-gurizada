@@ -8,7 +8,7 @@ import styles from "@/components/nexus.module.css";
 import { NexusMark } from "@/components/brand/NexusBrand";
 import { appConfig } from "@/config/app";
 import { AppButton, AppModal, Surface } from "@/design-system";
-import { getStoredAccountToken, requestPasswordReset, signInAccount, signUpAccount } from "@/services/auth/account.service";
+import { getStoredAccountToken, requestPasswordReset, resendSignupConfirmation, signInAccount, signUpAccount } from "@/services/auth/account.service";
 
 export function ServerEntry({
   onEnter,
@@ -26,6 +26,7 @@ export function ServerEntry({
   const [accountSubmitting, setAccountSubmitting] = useState(false);
   const [accountMessage, setAccountMessage] = useState<string | null>(null);
   const [accountEmail, setAccountEmail] = useState("");
+  const [confirmationEmail, setConfirmationEmail] = useState("");
   const enterAccount = onAccountEnter || (async () => undefined);
 
   async function submit(values: { nickname: string; accessCode: string }) {
@@ -49,6 +50,7 @@ export function ServerEntry({
       if (accountMode === "signup") {
         const result = await signUpAccount(values.email, values.username || "", values.password, values.accessCode || "");
         if (result.needsConfirmation) {
+          setConfirmationEmail(values.email.trim());
           setAccountMessage("Confira seu e-mail para confirmar a conta e depois entre por aqui.");
           return;
         }
@@ -61,6 +63,24 @@ export function ServerEntry({
       await enterAccount(accessToken);
     } catch (cause) {
       setAccountMessage(cause instanceof Error ? cause.message : "Não foi possível acessar a conta.");
+    } finally {
+      setAccountSubmitting(false);
+    }
+  }
+
+  async function resendConfirmation() {
+    const email = (confirmationEmail || accountEmail).trim();
+    if (!email) {
+      setAccountMessage("Informe o e-mail da conta antes de reenviar a confirmação.");
+      return;
+    }
+    setAccountSubmitting(true);
+    setAccountMessage(null);
+    try {
+      await resendSignupConfirmation(email);
+      setAccountMessage("Enviamos um novo link de confirmação. Confira também a pasta de spam.");
+    } catch (cause) {
+      setAccountMessage(cause instanceof Error ? cause.message : "Não foi possível reenviar a confirmação.");
     } finally {
       setAccountSubmitting(false);
     }
@@ -131,8 +151,8 @@ export function ServerEntry({
           ) : (
             <section className={styles.accountForm}>
               <div className={styles.accountMode}>
-                <AppButton size="small" variant={accountMode === "login" ? "primary" : "secondary"} onClick={() => setAccountMode("login")}>Entrar</AppButton>
-                <AppButton size="small" variant={accountMode === "signup" ? "primary" : "secondary"} onClick={() => setAccountMode("signup")}>Criar conta</AppButton>
+                <AppButton size="small" variant={accountMode === "login" ? "primary" : "secondary"} onClick={() => { setAccountMode("login"); setAccountMessage(null); }}>Entrar</AppButton>
+                <AppButton size="small" variant={accountMode === "signup" ? "primary" : "secondary"} onClick={() => { setAccountMode("signup"); setAccountMessage(null); }}>Criar conta</AppButton>
               </div>
               {accountMessage && <Alert type="info" showIcon title={accountMessage} />}
               <Form layout="vertical" requiredMark={false} onFinish={submitAccount} autoComplete="on">
@@ -141,6 +161,8 @@ export function ServerEntry({
                 <Form.Item label="Senha" name="password" rules={[{ required: true, min: 6, message: "Use pelo menos 6 caracteres." }]}><Input.Password prefix={<LockOutlined />} /></Form.Item>
                 {accountMode === "signup" && <Form.Item label="Código do servidor" name="accessCode" rules={[{ required: true, message: "Informe o código privado." }]}><Input.Password prefix={<LockOutlined />} /></Form.Item>}
                 <AppButton variant="primary" htmlType="submit" block loading={accountSubmitting}>{accountMode === "signup" ? "Criar conta" : "Entrar com conta"}</AppButton>
+                {accountMode === "signup" && confirmationEmail && <AppButton block loading={accountSubmitting} onClick={() => void resendConfirmation()}>Reenviar confirmação</AppButton>}
+                {accountMode === "login" && <button type="button" className={styles.accountForgot} onClick={() => void resendConfirmation()}>Reenviar confirmação de cadastro</button>}
                 {accountMode === "login" && <button type="button" className={styles.accountForgot} onClick={() => void forgotPassword()}>Esqueci minha senha</button>}
               </Form>
             </section>
