@@ -1,0 +1,23 @@
+.catalog { min-height: 100vh; padding: 56px max(24px, calc((100vw - 1120px) / 2)); background: var(--color-bg-base); }
+.catalogHeader { display: flex; gap: 32px; align-items: center; margin-bottom: 64px; }
+.catalogHeader > div:last-child > span, .section > header > span { color: var(--color-brand); letter-spacing: 0.14em; font-size: 11px; font-weight: 600; }
+.catalogHeader h1 { margin: 6px 0; font-size: 36px; letter-spacing: -0.04em; }
+.catalogHeader p, .section > header p { color: var(--color-text-muted); }
+.section { padding: 32px 0; border-top: 1px solid var(--color-border); }
+.section > header { margin-bottom: 24px; }
+.section > header p { margin-top: 6px; }
+.swatches { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
+.swatch { display: grid; gap: 6px; color: var(--color-text-secondary); font-size: 12px; }
+.swatch > span { height: 88px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
+.swatch code, .tokenLine code { color: var(--color-text-muted); font-family: var(--font-mono); font-size: 10px; }
+.tokenLine { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 16px; padding: 16px; }
+.tokenLine span { margin-right: auto; font-weight: 600; }
+.typeRamp { display: grid; gap: 8px; margin-top: 24px; }
+.typeRamp h2 { font-size: 32px; }.typeRamp h3 { font-size: 20px; }.typeRamp p { color: var(--color-text-secondary); }.typeRamp small { color: var(--color-text-muted); }
+.row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.statusExample { display: inline-flex; gap: 6px; align-items: center; color: var(--color-text-secondary); }
+.badgeAnchor { display: grid; width: 34px; height: 34px; place-items: center; border-radius: var(--radius-md); background: var(--color-bg-elevated); }
+.channelDemo { max-width: 300px; padding: 12px; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
+.loading { display: grid; min-height: 180px; place-items: center; }
+@media (max-width: 640px) { .catalog { padding: 32px 16px; }.catalogHeader { margin-bottom: 40px; }.grid2 { grid-template-columns: 1fr; } }

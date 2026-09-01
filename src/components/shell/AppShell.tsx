@@ -1,0 +1,287 @@
+"use client";
+
+import {
+  AudioMutedOutlined,
+  AudioOutlined,
+  CrownOutlined,
+  DesktopOutlined,
+  DisconnectOutlined,
+  MenuOutlined,
+  MessageOutlined,
+  SettingOutlined,
+  SoundOutlined,
+  StopOutlined,
+  TeamOutlined,
+  UsergroupAddOutlined,
+  VideoCameraAddOutlined,
+  VideoCameraOutlined,
+} from "@ant-design/icons";
+import { Alert, Drawer, Dropdown } from "antd";
+import { useMemo, useState } from "react";
+
+import styles from "@/components/nexus.module.css";
+import { AdminPanel } from "@/components/admin/AdminPanel";
+import { NexusMark } from "@/components/brand/NexusBrand";
+import { TextChannelItem, VoiceChannelItem } from "@/components/channels/ChannelItems";
+import { ChatPanel } from "@/components/chat/ChatPanel";
+import { MembersSidebar } from "@/components/members/MembersSidebar";
+import { DeviceSettings } from "@/components/voice/DeviceSettings";
+import { VoiceStage } from "@/components/voice/VoiceStage";
+import type { TextChannelId, VoiceChannelId } from "@/config/app";
+import { AppAvatar, AppButton, AppIconButton, AppScrollArea, ConnectionStatus, StatusDot } from "@/design-system";
+import type { NexusMember, useNexusRealtime } from "@/hooks/useNexusRealtime";
+import type { ChatTarget, PresenceStatus } from "@/types/realtime";
+
+type Realtime = ReturnType<typeof useNexusRealtime>;
+
+export function AppShell({ realtime }: { realtime: Realtime }) {
+  const [target, setTarget] = useState<ChatTarget>({ type: "channel", channelId: "general" });
+  const [view, setView] = useState<"chat" | "voice">("chat");
+  const [channelsOpen, setChannelsOpen] = useState(false);
+  const [membersOpen, setMembersOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const title = view === "chat"
+    ? target.type === "dm" ? `@ ${target.name}` : `# ${realtime.textChannels.find((channel) => channel.id === target.channelId)?.name}`
+    : realtime.voiceChannelId
+      ? realtime.voiceChannels.find((channel) => channel.id === realtime.voiceChannelId)?.name || "Chamada"
+      : "Chamada";
+
+  const messagesByChannel = useMemo(() => Object.fromEntries(realtime.textChannels.map((channel) => [
+    channel.id,
+    realtime.messages.filter((message) => message.channelId === channel.id).length,
+  ])), [realtime.messages, realtime.textChannels]);
+
+  async function chooseVoice(channelId: VoiceChannelId) {
+    setError(null);
+    try {
+      await realtime.joinVoice(channelId);
+      setView("voice");
+      setChannelsOpen(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível entrar no canal de voz.");
+    }
+  }
+
+  function chooseText(channelId: TextChannelId) {
+    setTarget({ type: "channel", channelId });
+    setView("chat");
+    setChannelsOpen(false);
+  }
+
+  function chooseMember(member: NexusMember) {
+    if (member.identity === realtime.user?.identity) return;
+    setTarget({ type: "dm", identity: member.identity, name: member.name });
+    setView("chat");
+    setMembersOpen(false);
+    setChannelsOpen(false);
+  }
+
+  const channelSidebar = (
+    <ChannelSidebarContent
+      realtime={realtime}
+      target={target}
+      messageCounts={messagesByChannel}
+      onText={chooseText}
+      onMember={chooseMember}
+      onVoice={(channel) => void chooseVoice(channel)}
+      onSettings={() => setSettingsOpen(true)}
+      onAdmin={() => setAdminOpen(true)}
+    />
+  );
+
+  return (
+    <main className={styles.appShell}>
+      <aside className={styles.serverRail}>
+        <NexusMark compact />
+        <span className={styles.railLine} />
+        <AppIconButton label="Chat" active={view === "chat"} icon={<MessageOutlined />} onClick={() => setView("chat")} />
+        <AppIconButton label="Chamada" active={view === "voice"} icon={<UsergroupAddOutlined />} onClick={() => setView("voice")} />
+      </aside>
+      <aside className={styles.channelSidebar}>{channelSidebar}</aside>
+      <section className={styles.mainColumn}>
+        <header className={styles.topBar}>
+          <AppIconButton className={styles.mobileOnly} label="Abrir canais" icon={<MenuOutlined />} onClick={() => setChannelsOpen(true)} />
+          <div className={styles.topBarTitle}>
+            <strong>{title}</strong>
+            <ConnectionStatus state={view === "voice" ? realtime.voiceState : realtime.lobbyState} />
+          </div>
+          <AppIconButton className={styles.mobileOnly} label="Ver participantes" icon={<TeamOutlined />} onClick={() => setMembersOpen(true)} />
+        </header>
+        {(error || realtime.mediaError) && (
+          <Alert className={styles.shellAlert} type="warning" showIcon closable={{ onClose: () => { setError(null); realtime.clearMediaError(); } }} title={error || realtime.mediaError} />
+        )}
+        <div className={styles.mainContent}>
+          {view === "chat" ? (
+            <ChatPanel
+              key={target.type === "channel" ? target.channelId : target.identity}
+              target={target}
+              channelName={target.type === "channel" ? realtime.textChannels.find((channel) => channel.id === target.channelId)?.name : undefined}
+              messages={realtime.messages}
+              onSend={realtime.sendMessage}
+              onSendFile={realtime.sendFile}
+              onSendPoll={realtime.sendPoll}
+            />
+          ) : (
+            <VoiceStage room={realtime.voiceRoom} participants={realtime.voiceParticipants} tracks={realtime.videoTracks} deafened={realtime.deafened} />
+          )}
+        </div>
+      </section>
+      <MembersSidebar members={realtime.members} selfIdentity={realtime.user?.identity} onMessage={chooseMember} />
+
+      <Drawer title="Canais" placement="left" size={300} open={channelsOpen} onClose={() => setChannelsOpen(false)} className={styles.mobileDrawer}>{channelSidebar}</Drawer>
+      <Drawer title="Participantes" placement="right" size={300} open={membersOpen} onClose={() => setMembersOpen(false)} className={styles.mobileDrawer}>
+        <MembersSidebar members={realtime.members} selfIdentity={realtime.user?.identity} onMessage={chooseMember} />
+      </Drawer>
+      <DeviceSettings
+        open={settingsOpen}
+        devices={realtime.devices}
+        supportsAudioOutput={realtime.supportsAudioOutput}
+        presenceStatus={realtime.presenceStatus}
+        shareActivity={realtime.shareActivity}
+        onClose={() => setSettingsOpen(false)}
+        onRefresh={realtime.refreshDevices}
+        onChange={realtime.switchDevice}
+        onPresence={realtime.updatePresence}
+        onActivitySharing={realtime.updateActivitySharing}
+      />
+      {realtime.user?.role === "admin" && (
+        <AdminPanel
+          open={adminOpen}
+          members={realtime.members}
+          voiceChannels={realtime.voiceChannels}
+          onClose={() => setAdminOpen(false)}
+          onRefresh={realtime.refreshServerConfig}
+        />
+      )}
+    </main>
+  );
+}
+
+interface ChannelSidebarContentProps {
+  realtime: Realtime;
+  target: ChatTarget;
+  messageCounts: Record<string, number>;
+  onText: (id: TextChannelId) => void;
+  onMember: (member: NexusMember) => void;
+  onVoice: (id: VoiceChannelId) => void;
+  onSettings: () => void;
+  onAdmin: () => void;
+}
+
+function ChannelSidebarContent({ realtime, target, messageCounts, onText, onMember, onVoice, onSettings, onAdmin }: ChannelSidebarContentProps) {
+  const [seenCounts, setSeenCounts] = useState<Record<string, number>>({});
+  const directMembers = realtime.members.filter((member) => member.identity !== realtime.user?.identity);
+  const currentVoice = realtime.voiceChannels.find((channel) => channel.id === realtime.voiceChannelId);
+  const statusItems: { key: PresenceStatus; label: string }[] = [
+    { key: "online", label: "Online" },
+    { key: "idle", label: "Ausente" },
+    { key: "dnd", label: "Não perturbe" },
+    { key: "invisible", label: "Invisível" },
+  ];
+
+  return (
+    <div className={styles.channelSidebarInner}>
+      <header className={styles.serverHeader}>
+        <NexusMark />
+        <div className={styles.serverHeaderActions}>
+          {realtime.user?.role === "admin" && <AppIconButton label="Administração" icon={<CrownOutlined />} onClick={onAdmin} />}
+          <ConnectionStatus state={realtime.lobbyState} />
+        </div>
+      </header>
+      <AppScrollArea className={styles.channelsScroll}>
+        <div className={styles.channelSection}>
+          <div className={styles.sectionLabel}>TEXTO</div>
+          {realtime.textChannels.map((channel) => (
+            <TextChannelItem
+              key={channel.id}
+              channel={channel}
+              selected={target.type === "channel" && target.channelId === channel.id}
+              unread={target.type === "channel" && target.channelId === channel.id ? 0 : Math.max(0, (messageCounts[channel.id] || 0) - (seenCounts[channel.id] || 0))}
+              onClick={() => {
+                setSeenCounts((current) => ({ ...current, [channel.id]: messageCounts[channel.id] || 0 }));
+                onText(channel.id);
+              }}
+            />
+          ))}
+        </div>
+        <div className={styles.channelSection}>
+          <div className={styles.sectionLabel}>VOZ</div>
+          {realtime.voiceChannels.map((channel) => (
+            <VoiceChannelItem
+              key={channel.id}
+              channel={channel}
+              selected={realtime.voiceChannelId === channel.id}
+              connecting={realtime.voiceState === "connecting"}
+              members={realtime.members.filter((member) => member.voiceChannelId === channel.id)}
+              onClick={() => onVoice(channel.id)}
+            />
+          ))}
+        </div>
+        {directMembers.length > 0 && (
+          <div className={styles.channelSection}>
+            <div className={styles.sectionLabel}>MENSAGENS DIRETAS</div>
+            {directMembers.map((member) => (
+              <button key={member.identity} className={`${styles.directMessageItem} ${target.type === "dm" && target.identity === member.identity ? styles.channelItemSelected : ""}`} onClick={() => onMember(member)}>
+                <span className={styles.memberAvatarWrap}><AppAvatar name={member.name} size={28} /><StatusDot status={member.status === "idle" ? "warning" : member.status === "dnd" ? "danger" : member.status === "invisible" ? "offline" : "online"} /></span>
+                <span>{member.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </AppScrollArea>
+
+      <div className={styles.sidebarFooter}>
+        {realtime.voiceRoom && (
+          <section className={styles.voiceConnectionPanel}>
+            <div className={styles.voiceConnectionTitle}>
+              <span className={styles.voiceSignal}><SoundOutlined /></span>
+              <span><strong>{realtime.voiceState === "connected" ? "Voz conectada" : "Conectando…"}</strong><small>{currentVoice?.name}</small></span>
+              <AppIconButton label="Desconectar voz" danger icon={<DisconnectOutlined />} onClick={() => void realtime.leaveVoice()} />
+            </div>
+            <div className={styles.voiceQuickControls}>
+              <AppButton size="small" icon={realtime.media.camera ? <VideoCameraOutlined /> : <VideoCameraAddOutlined />} onClick={() => void realtime.toggleCamera()}>
+                {realtime.media.camera ? "Câmera ligada" : "Câmera"}
+              </AppButton>
+              <AppButton size="small" icon={<DesktopOutlined />} onClick={() => void realtime.toggleScreenShare()}>
+                {realtime.media.screenShare ? "Parar tela" : "Transmitir"}
+              </AppButton>
+            </div>
+          </section>
+        )}
+        <div className={styles.currentUserPanel}>
+          <Dropdown
+            trigger={["click"]}
+            menu={{
+              items: [
+                ...statusItems,
+                { type: "divider" as const },
+                { key: "logout", label: "Sair do servidor", danger: true },
+              ],
+              onClick: ({ key }) => {
+                if (key === "logout") void realtime.disconnect();
+                else void realtime.updatePresence(key as PresenceStatus);
+              },
+            }}
+          >
+            <button className={styles.currentUserAvatar} aria-label="Alterar status">
+              <AppAvatar name={realtime.user?.displayName || "?"} size={38} />
+              <StatusDot status={realtime.presenceStatus === "idle" ? "warning" : realtime.presenceStatus === "dnd" ? "danger" : realtime.presenceStatus === "invisible" ? "offline" : "online"} />
+            </button>
+          </Dropdown>
+          <div className={styles.currentUserText}>
+            <strong>{realtime.user?.displayName}</strong>
+            <span>{realtime.activity || (realtime.voiceChannelId ? "Em voz" : statusItems.find((item) => item.key === realtime.presenceStatus)?.label)}</span>
+          </div>
+          <div className={styles.currentUserControls}>
+            <AppIconButton disabled={!realtime.voiceRoom} label={realtime.media.microphone ? "Desativar microfone" : "Ativar microfone"} danger={Boolean(realtime.voiceRoom && !realtime.media.microphone)} icon={realtime.media.microphone ? <AudioOutlined /> : <AudioMutedOutlined />} onClick={() => void realtime.toggleMicrophone()} />
+            <AppIconButton disabled={!realtime.voiceRoom} label={realtime.deafened ? "Ativar áudio remoto" : "Desativar áudio remoto"} active={realtime.deafened} icon={realtime.deafened ? <StopOutlined /> : <SoundOutlined />} onClick={() => realtime.setDeafened(!realtime.deafened)} />
+            <AppIconButton label="Configurações" icon={<SettingOutlined />} onClick={onSettings} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
