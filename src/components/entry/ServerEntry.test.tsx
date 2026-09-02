@@ -9,6 +9,7 @@ describe("entrada no servidor", () => {
     const user = userEvent.setup();
     const onEnter = vi.fn().mockResolvedValue(undefined);
     render(<ServerEntry onEnter={onEnter} />);
+    await user.click(screen.getByRole("tab", { name: /Acesso anônimo/ }));
 
     await user.type(screen.getByLabelText("Seu nome"), "Diogo");
     await user.type(screen.getByLabelText("Código de acesso"), "segredo");
@@ -20,6 +21,7 @@ describe("entrada no servidor", () => {
   it("mostra feedback quando a entrada falha", async () => {
     const user = userEvent.setup();
     render(<ServerEntry onEnter={vi.fn().mockRejectedValue(new Error("Código inválido"))} />);
+    await user.click(screen.getByRole("tab", { name: /Acesso anônimo/ }));
     await user.type(screen.getByLabelText("Seu nome"), "Diogo");
     await user.type(screen.getByLabelText("Código de acesso"), "errado");
     await user.click(screen.getByRole("button", { name: "Entrar no servidor" }));

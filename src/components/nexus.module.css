@@ -55,6 +55,8 @@
 .entryCard {
   position: relative;
   z-index: 1;
+  width: 100%;
+  max-width: 460px;
   padding: var(--space-lg);
   box-shadow: var(--shadow-elevated);
 }
@@ -63,9 +65,17 @@
 .secureLabel { display: inline-flex; gap: 6px; align-items: center; letter-spacing: 0; font-weight: 400; }
 .entryAlert { margin-bottom: var(--space-md); }
 .entryFootnote { margin: var(--space-md) auto 0; max-width: 300px; color: var(--color-text-muted); text-align: center; font-size: 12px; line-height: 1.5; }
-.accountAccess { display: grid; gap: var(--space-sm); margin-top: var(--space-lg); padding-top: var(--space-md); border-top: 1px solid var(--color-border); }
-.accountAccess > div:first-child, .accountForm { display: grid; gap: var(--space-xs); }
-.accountAccess small { color: var(--color-text-muted); line-height: 1.45; }
+.entryTabs :global(.ant-tabs-nav) { margin-bottom: var(--space-md); }
+.entryTabs :global(.ant-tabs-tab) { padding: 10px 8px; color: var(--color-text-muted); font-size: 13px; }
+.entryTabs :global(.ant-tabs-tab-active) { color: var(--color-text-primary); }
+.entryTabs :global(.ant-tabs-ink-bar) { height: 2px; border-radius: 999px; }
+.entryTabLabel { display: inline-flex; gap: 7px; align-items: center; }
+.entryPanel { display: grid; gap: var(--space-sm); }
+.entryPanelIntro { display: grid; gap: 3px; margin-bottom: var(--space-xs); }
+.entryPanelIntro strong { color: var(--color-text-primary); font-size: 15px; }
+.entryPanelIntro small { color: var(--color-text-muted); line-height: 1.45; }
+.entryPanel :global(.ant-form-item) { margin-bottom: var(--space-md); }
+.entryPanel :global(.ant-form-item:last-child) { margin-bottom: 0; }
 .accountMode { display: grid !important; grid-template-columns: 1fr 1fr; gap: var(--space-xs); margin-bottom: var(--space-xs); }
 .accountForgot { justify-self: center; padding: 2px 4px; color: var(--color-brand); border: 0; background: transparent; cursor: pointer; font-size: 12px; }
 .accountForgot:hover { text-decoration: underline; }
