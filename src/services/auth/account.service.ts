@@ -1,4 +1,4 @@
-import { createClient, type Session } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 
 import type { ApiError, TokenSuccess } from "@/types/realtime";
 
@@ -26,22 +26,33 @@ function siteUrl(path = "") {
   return `${configured || window.location.origin}${path}`;
 }
 
-async function saveAccountProfile(session: Session, username: string, accessCode: string) {
-  const response = await fetch("/api/account/profile", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-    body: JSON.stringify({ username, accessCode }),
-  });
-  const payload = await response.json() as ApiError;
+async function readAccountResponse(response: Response) {
+  const payload = await response.json() as {
+    accessToken?: string | null;
+    refreshToken?: string | null;
+    needsConfirmation?: boolean;
+    message?: string;
+  };
   if (!response.ok) throw new Error(payload.message || "Não foi possível preparar a conta.");
+  return payload;
+}
+
+async function setBrowserSession(accessToken: string, refreshToken: string) {
+  const { error } = await getBrowserClient().auth.setSession({
+    access_token: accessToken,
+    refresh_token: refreshToken,
+  });
+  if (error) throw error;
 }
 
 export async function signUpAccount(email: string, username: string, password: string, accessCode: string) {
-  const { data, error } = await getBrowserClient().auth.signUp({ email, password, options: { emailRedirectTo: siteUrl("/") } });
-  if (error) throw error;
-  if (!data.session) return { needsConfirmation: true };
-  await saveAccountProfile(data.session, username, accessCode);
-  return { needsConfirmation: false };
+  const payload = await readAccountResponse(await fetch("/api/account/signup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, username, password, accessCode }),
+  }));
+  if (payload.accessToken && payload.refreshToken) await setBrowserSession(payload.accessToken, payload.refreshToken);
+  return { needsConfirmation: Boolean(payload.needsConfirmation) };
 }
 
 export async function resendSignupConfirmation(email: string) {
@@ -53,10 +64,15 @@ export async function resendSignupConfirmation(email: string) {
   if (error) throw error;
 }
 
-export async function signInAccount(email: string, password: string): Promise<string> {
-  const { data, error } = await getBrowserClient().auth.signInWithPassword({ email, password });
-  if (error || !data.session) throw error || new Error("Não foi possível entrar com essa conta.");
-  return data.session.access_token;
+export async function signInAccount(username: string, password: string): Promise<string> {
+  const payload = await readAccountResponse(await fetch("/api/account/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  }));
+  if (!payload.accessToken || !payload.refreshToken) throw new Error("Não foi possível entrar com essa conta.");
+  await setBrowserSession(payload.accessToken, payload.refreshToken);
+  return payload.accessToken;
 }
 
 export async function getStoredAccountToken(): Promise<string | null> {

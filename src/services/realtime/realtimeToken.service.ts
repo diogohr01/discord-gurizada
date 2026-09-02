@@ -34,9 +34,17 @@ export async function getRealtimeToken(request: TokenRequest): Promise<TokenSucc
   return payload as TokenSuccess;
 }
 
+export async function restoreRealtimeToken(): Promise<TokenSuccess> {
+  return getRealtimeToken({ action: "restore" });
+}
+
 export async function clearRealtimeSession(): Promise<void> {
-  await fetch("/api/livekit/token", {
-    method: "DELETE",
-    credentials: "same-origin",
-  });
+  try {
+    await fetch("/api/livekit/token", {
+      method: "DELETE",
+      credentials: "same-origin",
+    });
+  } catch {
+    // The following authentication request will still be authoritative.
+  }
 }

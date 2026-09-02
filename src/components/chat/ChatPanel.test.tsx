@@ -54,4 +54,17 @@ describe("chat em tempo real", () => {
 
     expect(screen.getByRole("button", { name: /1 nova mensagem/i })).toBeVisible();
   });
+
+  it("fecha o seletor de emotes pelo botao no cabecalho", async () => {
+    const onSend = vi.fn().mockResolvedValue(undefined);
+    render(<ChatPanel target={{ type: "channel", channelId: "general" }} channelName="geral" messages={[]} onSend={onSend} onSendFile={vi.fn()} onSendPoll={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Mais/ }));
+    fireEvent.click(await screen.findByText("Abrir emotes"));
+
+    expect(await screen.findByRole("button", { name: "Fechar emotes" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Fechar emotes" }));
+
+    await waitFor(() => expect(document.querySelector(".ant-popover")).toHaveClass("ant-zoom-big-leave"));
+  });
 });

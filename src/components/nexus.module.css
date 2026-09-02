@@ -197,14 +197,20 @@
 .threadCard { display: inline-flex; gap: var(--space-sm); align-items: center; margin-top: var(--space-xs); padding: var(--space-sm); color: var(--color-text-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-elevated); }
 .threadCard > span { display: flex; flex-direction: column; }
 .modalForm { display: grid; gap: var(--space-sm); }
+.emojiPopoverHeader { display: flex; gap: var(--space-md); align-items: center; justify-content: space-between; }
+.emojiPopoverHeader :global(.nexus-icon-button.ant-btn) { width: 28px; height: 28px; min-height: 28px; }
 .emojiPicker { display: grid; grid-template-columns: repeat(4, 42px); gap: 4px; }
 .emojiButton { display: grid; width: 42px; height: 42px; place-items: center; color: var(--color-text-primary); border: 1px solid transparent; border-radius: var(--radius-md); background: transparent; cursor: pointer; font-size: 23px; }
 .emojiButton:hover { border-color: var(--color-border); background: var(--color-bg-hover); }
 
 .voiceStage { height: 100%; min-height: 0; padding: var(--space-md); overflow: auto; background: var(--color-bg-base); }
 .focusStage { position: relative; display: grid; height: calc(100% - 112px); min-height: 260px; place-items: center; overflow: hidden; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-bg-base); }
+.focusStageExpanded { height: 100%; }
 .focusVideo { width: 100%; height: 100%; object-fit: contain; }
 .trackLabel { position: absolute; top: var(--space-sm); left: var(--space-sm); display: inline-flex; gap: var(--space-xs); align-items: center; padding: 5px 9px; color: var(--color-text-primary); border-radius: var(--radius-md); background: var(--color-overlay-soft); font-size: 12px; }
+.screenShareAudioControls { position: absolute; right: var(--space-sm); bottom: var(--space-sm); z-index: 1; display: flex; gap: var(--space-xs); align-items: center; min-width: 220px; padding: 4px 8px 4px 4px; color: var(--color-text-primary); border-radius: 999px; background: var(--color-overlay-soft); }
+.screenShareAudioControls :global(.ant-slider) { width: 120px; margin: 0 4px; }
+.screenShareAudioControls > span:last-child { min-width: 34px; color: var(--color-text-secondary); font-size: 11px; text-align: right; }
 .stageActions { position: absolute; top: var(--space-sm); right: var(--space-sm); display: flex; gap: var(--space-xs); padding: 4px; border-radius: 999px; background: var(--color-overlay-soft); }
 .voiceThumbnails { display: flex; gap: var(--space-sm); height: 96px; margin-top: var(--space-md); overflow-x: auto; }
 .thumbnail { position: relative; width: 148px; flex: 0 0 auto; overflow: hidden; color: var(--color-text-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-panel); cursor: pointer; }
@@ -216,7 +222,7 @@
 .participantTile video { position: absolute; width: 100%; height: 100%; object-fit: cover; }
 .participantTile > span:last-child { z-index: 1; }
 .participantTile video + span { position: absolute; bottom: var(--space-sm); left: var(--space-sm); padding: 4px 7px; border-radius: var(--radius-sm); background: var(--color-overlay-soft); }
-.participantMini { display: flex; width: 132px; flex: 0 0 auto; flex-direction: column; gap: 4px; align-items: center; justify-content: center; overflow: hidden; color: var(--color-text-muted); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-panel); font-size: 11px; }
+.participantMini { display: flex; width: 132px; flex: 0 0 auto; flex-direction: column; gap: 4px; align-items: center; justify-content: center; padding: var(--space-sm); overflow: hidden; color: var(--color-text-muted); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-panel); cursor: pointer; font: inherit; font-size: 11px; }
 .participantMini small { color: var(--color-online); }
 .participantSpeaking { border-color: var(--color-online); box-shadow: 0 0 0 1px var(--color-online); }
 .participantTile :global(.ant-avatar), .participantMini :global(.ant-avatar) { color: var(--color-brand); background: var(--color-bg-elevated); }
@@ -225,6 +231,35 @@
 .voiceControls :global(.ant-btn) { width: 42px; height: 42px; }
 .controlDivider { width: 1px; height: 28px; margin: 0 4px; background: var(--color-border); }
 .settingsBody { display: grid; gap: var(--space-md); }
+.settingsIntro { display: flex; gap: var(--space-md); align-items: flex-start; justify-content: space-between; padding-bottom: var(--space-xs); }
+.settingsIntro h3, .settingsSectionHeading h3, .microphoneTest h3 { margin: 0; color: var(--color-text-primary); font-size: 15px; }
+.settingsIntro p, .settingsSectionHeading p, .microphoneTest p { margin: 3px 0 0; color: var(--color-text-muted); font-size: 12px; line-height: 1.45; }
+.settingsStatus { display: inline-flex; gap: 6px; align-items: center; color: var(--color-online); font-size: 11px; white-space: nowrap; }
+.settingsStatusDot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-online); }
+.settingsDeviceGrid, .settingsVolumeGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-md); }
+.microphoneTest { display: grid; gap: var(--space-sm); padding: var(--space-md); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-bg-elevated); }
+.microphoneTestHeader { display: flex; gap: var(--space-md); align-items: center; justify-content: space-between; }
+.microphoneTestHeader > div { min-width: 0; }
+.microphoneTestHeader :global(.ant-btn) { flex: 0 0 auto; }
+.micMeter { display: flex; gap: 3px; align-items: center; height: 32px; padding: 0 2px; }
+.micMeter span { height: 100%; min-height: 8px; flex: 1; border-radius: 3px; background: var(--color-border-strong); opacity: .7; transition: background var(--motion-fast) var(--motion-ease), opacity var(--motion-fast) var(--motion-ease); }
+.micMeter .micMeterActive { background: var(--color-brand); opacity: 1; }
+.micMeter .micMeterActive:nth-last-child(-n + 5) { background: var(--color-online); }
+.volumeControl { display: grid; gap: var(--space-xs); padding: var(--space-sm) var(--space-md); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-panel); }
+.volumeControl > span { display: flex; gap: var(--space-sm); justify-content: space-between; color: var(--color-text-secondary); font-size: 12px; }
+.volumeControl output { color: var(--color-brand); font-variant-numeric: tabular-nums; }
+.volumeControl :global(.ant-slider) { margin: 7px 4px; }
+.settingsSectionDivider { height: 1px; background: var(--color-border); }
+.inputProfileSection { display: grid; gap: var(--space-md); }
+.inputProfileOptions { display: grid; gap: var(--space-sm); }
+.inputProfileOptions :global(.ant-radio-wrapper) { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-sm); align-items: flex-start; margin: 0; color: var(--color-text-secondary); }
+.inputProfileOptions :global(.ant-radio) { margin-top: 2px; }
+.inputProfileOptions :global(.ant-radio-wrapper > span:last-child) { display: grid; gap: 2px; }
+.inputProfileOptions strong, .audioToggle strong { color: var(--color-text-primary); font-size: 13px; font-weight: 500; }
+.inputProfileOptions small, .audioToggle small { color: var(--color-text-muted); font-size: 12px; line-height: 1.4; }
+.audioToggles { display: grid; gap: var(--space-sm); }
+.audioToggle { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-md); align-items: center; padding: var(--space-sm) var(--space-md); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-panel); }
+.audioToggle > span { display: grid; gap: 2px; }
 .profileAvatarEditor { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-md); align-items: center; padding: var(--space-md); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-bg-elevated); }
 .profileAvatarEditor > div { display: grid; gap: var(--space-xs); }
 .profileAvatarEditor small { color: var(--color-text-muted); line-height: 1.45; }
@@ -309,4 +344,10 @@
   .chatComposer { padding: var(--space-xs); }
   .participantGrid { grid-template-columns: 1fr; align-content: start; }
   .participantTile { min-height: 180px; }
+}
+
+@media (max-width: 600px) {
+  .settingsIntro, .microphoneTestHeader { align-items: flex-start; flex-direction: column; }
+  .settingsDeviceGrid, .settingsVolumeGrid { grid-template-columns: 1fr; }
+  .settingsStatus { white-space: normal; }
 }

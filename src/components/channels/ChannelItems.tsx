@@ -11,6 +11,7 @@ import {
 import type { ReactNode } from "react";
 
 import styles from "@/components/nexus.module.css";
+import { isAfkVoiceChannelId } from "@/config/app";
 import type { NexusMember } from "@/hooks/useNexusRealtime";
 import type { TextChannel, VoiceChannel } from "@/types/realtime";
 import { AppAvatar } from "@/design-system";
@@ -37,6 +38,7 @@ export function VoiceChannelItem({ channel, selected, connecting, members, onCli
       <button className={`${styles.channelItem} ${selected ? styles.channelItemSelected : ""}`} onClick={onClick} aria-pressed={selected}>
         {voiceIcons[channel.icon]}
         <span>{channel.name}</span>
+        {isAfkVoiceChannelId(channel.id) && <span className={styles.channelMeta}>20 min</span>}
         {connecting && selected && <span className={styles.channelMeta}>entrando…</span>}
       </button>
       {members.map((member) => (

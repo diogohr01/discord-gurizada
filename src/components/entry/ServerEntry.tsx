@@ -8,7 +8,8 @@ import styles from "@/components/nexus.module.css";
 import { NexusMark } from "@/components/brand/NexusBrand";
 import { appConfig } from "@/config/app";
 import { AppButton, AppModal, Surface } from "@/design-system";
-import { getStoredAccountToken, requestPasswordReset, resendSignupConfirmation, signInAccount, signUpAccount } from "@/services/auth/account.service";
+import { getStoredAccountToken, requestPasswordReset, resendSignupConfirmation, signInAccount, signOutAccount, signUpAccount } from "@/services/auth/account.service";
+import { clearRealtimeSession } from "@/services/realtime/realtimeToken.service";
 
 export function ServerEntry({
   onEnter,
@@ -33,6 +34,10 @@ export function ServerEntry({
     setSubmitting(true);
     setError(null);
     try {
+      await clearRealtimeSession();
+      if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
+        await signOutAccount();
+      }
       if (adminToken) await onEnter(values.nickname, values.accessCode, adminToken);
       else await onEnter(values.nickname, values.accessCode);
     } catch (cause) {
@@ -42,15 +47,16 @@ export function ServerEntry({
     }
   }
 
-  async function submitAccount(values: { email: string; password: string; username?: string; accessCode?: string }) {
+  async function submitAccount(values: { username: string; email?: string; password: string; accessCode?: string }) {
     setAccountSubmitting(true);
     setAccountMessage(null);
     setError(null);
     try {
+      await clearRealtimeSession();
       if (accountMode === "signup") {
-        const result = await signUpAccount(values.email, values.username || "", values.password, values.accessCode || "");
+        const result = await signUpAccount(values.email || "", values.username, values.password, values.accessCode || "");
         if (result.needsConfirmation) {
-          setConfirmationEmail(values.email.trim());
+          setConfirmationEmail(values.email?.trim() || "");
           setAccountMessage("Confira seu e-mail para confirmar a conta e depois entre por aqui.");
           return;
         }
@@ -59,7 +65,7 @@ export function ServerEntry({
         await enterAccount(accessToken);
         return;
       }
-      const accessToken = await signInAccount(values.email, values.password);
+      const accessToken = await signInAccount(values.username, values.password);
       await enterAccount(accessToken);
     } catch (cause) {
       setAccountMessage(cause instanceof Error ? cause.message : "Não foi possível acessar a conta.");
@@ -156,9 +162,10 @@ export function ServerEntry({
               </div>
               {accountMessage && <Alert type="info" showIcon title={accountMessage} />}
               <Form layout="vertical" requiredMark={false} onFinish={submitAccount} autoComplete="on">
-                {accountMode === "signup" && <Form.Item label="Usuário" name="username" rules={[{ required: true, min: 2, max: 32, message: "Escolha um usuário entre 2 e 32 caracteres." }]}><Input prefix={<UserOutlined />} placeholder="diogo" maxLength={32} /></Form.Item>}
-                <Form.Item label="E-mail" name="email" rules={[{ required: true, type: "email", message: "Informe um e-mail válido." }]}><Input placeholder="voce@email.com" onChange={(event) => setAccountEmail(event.target.value)} /></Form.Item>
-                <Form.Item label="Senha" name="password" rules={[{ required: true, min: 6, message: "Use pelo menos 6 caracteres." }]}><Input.Password prefix={<LockOutlined />} /></Form.Item>
+                <Form.Item label="Usuário" name="username" rules={[{ required: true, min: 2, max: 32, message: "Informe o usuário da conta." }]}><Input prefix={<UserOutlined />} placeholder="diogo" maxLength={32} autoComplete="username" /></Form.Item>
+                {accountMode === "signup" && <Form.Item label="E-mail" name="email" rules={[{ required: true, type: "email", message: "Informe um e-mail válido." }]}><Input placeholder="voce@email.com" onChange={(event) => setAccountEmail(event.target.value)} autoComplete="email" /></Form.Item>}
+                {accountMode === "login" && <Form.Item label="E-mail para recuperação (opcional)" name="recoveryEmail"><Input placeholder="voce@email.com" onChange={(event) => setAccountEmail(event.target.value)} autoComplete="email" /></Form.Item>}
+                <Form.Item label="Senha" name="password" rules={[{ required: true, min: 6, message: "Use pelo menos 6 caracteres." }]}><Input.Password prefix={<LockOutlined />} autoComplete={accountMode === "signup" ? "new-password" : "current-password"} /></Form.Item>
                 {accountMode === "signup" && <Form.Item label="Código do servidor" name="accessCode" rules={[{ required: true, message: "Informe o código privado." }]}><Input.Password prefix={<LockOutlined />} /></Form.Item>}
                 <AppButton variant="primary" htmlType="submit" block loading={accountSubmitting}>{accountMode === "signup" ? "Criar conta" : "Entrar com conta"}</AppButton>
                 {accountMode === "signup" && confirmationEmail && <AppButton block loading={accountSubmitting} onClick={() => void resendConfirmation()}>Reenviar confirmação</AppButton>}

@@ -1,4 +1,4 @@
-import { textChannels, voiceChannels } from "@/config/app";
+import { AFK_VOICE_CHANNEL_ID, textChannels, voiceChannels } from "@/config/app";
 import { createSupabaseDataClient } from "@/lib/supabase/server";
 import type { AdminLogEntry, ServerConfiguration, TextChannel, VoiceChannel } from "@/types/realtime";
 
@@ -34,7 +34,11 @@ async function seedDefaultChannels() {
 function toServerConfiguration(rows: ChannelRow[]): ServerConfiguration {
   return {
     textChannels: rows.filter((row) => row.kind === "text").map((row): TextChannel => ({ id: row.id, name: row.name, topic: row.topic })),
-    voiceChannels: rows.filter((row) => row.kind === "voice").map((row): VoiceChannel => ({ id: row.id, name: row.name, icon: row.icon || "sound" })),
+    voiceChannels: rows.filter((row) => row.kind === "voice").map((row): VoiceChannel => ({
+      id: row.id,
+      name: row.id === AFK_VOICE_CHANNEL_ID ? "AFK" : row.name,
+      icon: row.id === AFK_VOICE_CHANNEL_ID ? "sleep" : row.icon || "sound",
+    })),
   };
 }
 

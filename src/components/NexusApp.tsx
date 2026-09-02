@@ -9,16 +9,22 @@ import { useEffect, useState } from "react";
 export function NexusApp() {
   const realtime = useNexusRealtime();
   const [restoring, setRestoring] = useState(true);
-  const { connectAccount } = realtime;
+  const { connectAccount, restore } = realtime;
 
   useEffect(() => {
     let active = true;
     void getStoredAccountToken()
-      .then((accessToken) => accessToken ? connectAccount(accessToken).catch(() => undefined) : undefined)
+      .then(async (accessToken) => {
+        if (accessToken) {
+          await connectAccount(accessToken).catch(() => undefined);
+          return;
+        }
+        await restore().catch(() => undefined);
+      })
       .catch(() => undefined)
       .finally(() => { if (active) setRestoring(false); });
     return () => { active = false; };
-  }, [connectAccount]);
+  }, [connectAccount, restore]);
 
   if (restoring && !realtime.user) return null;
   return realtime.user ? (

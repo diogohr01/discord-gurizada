@@ -22,6 +22,10 @@ export function normalizeNickname(raw: string): string {
   return raw.trim().replace(/\s+/g, " ");
 }
 
+export function normalizeUsernameKey(raw: string): string {
+  return normalizeNickname(raw).toLowerCase();
+}
+
 export function validateNickname(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const nickname = normalizeNickname(raw);

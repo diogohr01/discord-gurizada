@@ -2,7 +2,7 @@ import { TrackSource } from "@livekit/protocol";
 import { RoomServiceClient } from "livekit-server-sdk";
 import { NextResponse } from "next/server";
 
-import { roomNames } from "@/config/app";
+import { isAfkVoiceChannelId, roomNames } from "@/config/app";
 import { addAdminLog, addServerChannel, getAdminLogs, getServerConfiguration, isConfiguredVoiceChannel } from "@/lib/server-state";
 import { getCurrentSession } from "@/lib/session-server";
 import type { ApiError } from "@/types/realtime";
@@ -55,6 +55,7 @@ export async function POST(request: Request) {
 
     if (body.action === "mute" && typeof body.identity === "string" && typeof body.channelId === "string" && typeof body.muted === "boolean") {
       if (!(await isConfiguredVoiceChannel(body.channelId))) return failure(400, "INVALID_CHANNEL", "Canal inválido.");
+      if (isAfkVoiceChannelId(body.channelId)) return failure(403, "AFK_PROTECTED", "O canal AFK é automático e não pode ser moderado.");
       const service = roomService();
       const room = roomNames.voice(body.channelId);
       const participant = await service.getParticipant(room, body.identity);
@@ -68,6 +69,7 @@ export async function POST(request: Request) {
 
     if (body.action === "move" && typeof body.identity === "string" && typeof body.fromChannelId === "string" && typeof body.toChannelId === "string") {
       if (!(await isConfiguredVoiceChannel(body.fromChannelId)) || !(await isConfiguredVoiceChannel(body.toChannelId))) return failure(400, "INVALID_CHANNEL", "Canal inválido.");
+      if (isAfkVoiceChannelId(body.fromChannelId) || isAfkVoiceChannelId(body.toChannelId)) return failure(403, "AFK_PROTECTED", "O canal AFK é automático e não pode ser alterado pelo admin.");
       const service = roomService();
       await service.moveParticipant(roomNames.voice(body.fromChannelId), body.identity, roomNames.voice(body.toChannelId));
       await service.updateParticipant(roomNames.lobby, body.identity, { attributes: { voiceChannelId: body.toChannelId } });

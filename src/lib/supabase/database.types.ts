@@ -59,10 +59,11 @@ export interface Database {
           id: string;
           email: string;
           username: string;
+          username_key: string;
           created_at: string;
           updated_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["users"]["Row"], "created_at" | "updated_at"> & { created_at?: string; updated_at?: string };
+        Insert: Omit<Database["public"]["Tables"]["users"]["Row"], "username_key" | "created_at" | "updated_at"> & { created_at?: string; updated_at?: string };
         Update: Partial<Database["public"]["Tables"]["users"]["Insert"]>;
         Relationships: [];
       };

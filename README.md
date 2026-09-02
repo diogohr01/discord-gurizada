@@ -15,7 +15,7 @@ No Windows com execução de scripts PowerShell bloqueada, use `npm.cmd` e `npx.
 
 Além das credenciais do LiveKit, aplique `supabase/migrations/0001_discord_gurizada.sql` no SQL Editor do Supabase. A migration cria canais persistentes, logs, mensagens, índices, RLS e o bucket privado `chat-files`.
 
-O servidor prefere `SUPABASE_SECRET_KEY` (ou `SUPABASE_SERVICE_ROLE_KEY`, legado). Se nenhuma estiver definida, o MVP usa a publishable key apenas nos Route Handlers e depende das policies da migration. Nunca exponha uma secret/service key no browser.
+O servidor prefere `SUPABASE_SECRET_KEY` (ou `SUPABASE_SERVICE_ROLE_KEY`, legado). Para cadastro com confirmação de e-mail e login por usuário, defina essa chave no servidor; sem ela o MVP usa a publishable key apenas nos Route Handlers e depende das policies da migration. Nunca exponha uma secret/service key no browser.
 
 1. Copie `.env.example` para `.env.local`.
 2. No painel do LiveKit Cloud, abra as configurações do projeto e copie a URL WebSocket, API Key e API Secret.
@@ -39,7 +39,7 @@ Somente `NEXT_PUBLIC_APP_NAME` é exposta no bundle. As outras variáveis são l
 
 ## Contas e sessão persistente
 
-As contas usam Supabase Auth com persistência no armazenamento local do navegador. Para habilitar o cadastro, aplique também `supabase/migrations/0002_profile_avatars.sql` e `supabase/migrations/0003_user_accounts.sql`. O cadastro pede e-mail, usuário, senha e o código privado uma única vez; depois a sessão é restaurada automaticamente neste navegador.
+As contas usam Supabase Auth com persistência no armazenamento local do navegador. Para habilitar o cadastro, aplique também `supabase/migrations/0002_profile_avatars.sql`, `supabase/migrations/0003_user_accounts.sql` e `supabase/migrations/0004_username_case_insensitive.sql`. O cadastro pede e-mail, usuário, senha e o código privado uma única vez; depois o login usa usuário + senha e a sessão é restaurada automaticamente neste navegador.
 
 O chat transforma URLs `http`/`https` em links clicáveis, aceita colar imagens e arquivos com `Ctrl+V` e oferece emojis no botão `+`.
 

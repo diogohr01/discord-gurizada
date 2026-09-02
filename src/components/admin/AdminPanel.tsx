@@ -5,6 +5,7 @@ import { Input, Select } from "antd";
 import { useEffect, useState } from "react";
 
 import styles from "@/components/nexus.module.css";
+import { isAfkVoiceChannelId } from "@/config/app";
 import { AppAvatar, AppButton, AppModal } from "@/design-system";
 import type { NexusMember } from "@/hooks/useNexusRealtime";
 import { getAdminState, runAdminAction } from "@/services/server/serverConfig.service";
@@ -73,14 +74,16 @@ export function AdminPanel({ open, members, voiceChannels, onClose, onRefresh }:
                 <div
                   key={member.identity}
                   className={styles.adminMember}
-                  draggable
+                  draggable={!isAfkVoiceChannelId(member.voiceChannelId)}
                   onDragStart={(event) => event.dataTransfer.setData("application/json", JSON.stringify({ identity: member.identity, fromChannelId: member.voiceChannelId }))}
                 >
                   <AppAvatar name={member.name} size={30} />
                   <span><strong>{member.name}</strong><small>{voiceChannels.find((channel) => channel.id === member.voiceChannelId)?.name}</small></span>
-                  <AppButton size="small" variant={member.isMicrophoneMuted ? "danger" : "secondary"} icon={<AudioMutedOutlined />} loading={busy} onClick={() => void action({ action: "mute", identity: member.identity, channelId: member.voiceChannelId, muted: !member.isMicrophoneMuted })}>
-                    {member.isMicrophoneMuted ? "Liberar" : "Mutar"}
-                  </AppButton>
+                  {!isAfkVoiceChannelId(member.voiceChannelId) && (
+                    <AppButton size="small" variant={member.isMicrophoneMuted ? "danger" : "secondary"} icon={<AudioMutedOutlined />} loading={busy} onClick={() => void action({ action: "mute", identity: member.identity, channelId: member.voiceChannelId, muted: !member.isMicrophoneMuted })}>
+                      {member.isMicrophoneMuted ? "Liberar" : "Mutar"}
+                    </AppButton>
+                  )}
                 </div>
               ))}
             </div>
@@ -89,16 +92,17 @@ export function AdminPanel({ open, members, voiceChannels, onClose, onRefresh }:
                 <div
                   key={channel.id}
                   className={styles.adminDropZone}
-                  onDragOver={(event) => event.preventDefault()}
+                  onDragOver={(event) => { if (!isAfkVoiceChannelId(channel.id)) event.preventDefault(); }}
                   onDrop={(event) => {
                     event.preventDefault();
+                    if (isAfkVoiceChannelId(channel.id)) return;
                     try {
                       const data = JSON.parse(event.dataTransfer.getData("application/json")) as { identity: string; fromChannelId: string };
                       if (data.fromChannelId !== channel.id) void action({ action: "move", identity: data.identity, fromChannelId: data.fromChannelId, toChannelId: channel.id });
                     } catch { setError("Não foi possível ler o usuário arrastado."); }
                   }}
                 >
-                  <SwapOutlined /> <span>Soltar em <strong>{channel.name}</strong></span>
+                  <SwapOutlined /> <span>{isAfkVoiceChannelId(channel.id) ? <><strong>{channel.name}</strong> é automático</> : <>Soltar em <strong>{channel.name}</strong></>}</span>
                 </div>
               ))}
             </div>

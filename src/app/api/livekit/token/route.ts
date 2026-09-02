@@ -111,6 +111,18 @@ export async function POST(request: Request) {
       return response;
     }
 
+    if (body.action === "restore") {
+      const cookieStore = await cookies();
+      const session = verifySession(
+        cookieStore.get(SESSION_COOKIE_NAME)?.value,
+        sessionSecret,
+      );
+      if (!session || session.accountId) {
+        return error(401, "SESSION_EXPIRED", "Sua sessÃ£o expirou. Entre novamente.");
+      }
+      return NextResponse.json(await createLobbyToken(session));
+    }
+
     if (body.action === "voice" && await isConfiguredVoiceChannel(body.channelId)) {
       const cookieStore = await cookies();
       const session = verifySession(

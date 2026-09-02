@@ -8,14 +8,15 @@ import {
   supportsAudioOutputSelection,
   type Participant,
   type TrackPublication,
+  type AudioCaptureOptions,
 } from "livekit-client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { textChannels as defaultTextChannels, voiceChannels as defaultVoiceChannels, type TextChannelId, type VoiceChannelId } from "@/config/app";
+import { AFK_TIMEOUT_MS, AFK_VOICE_CHANNEL_ID, isAfkVoiceChannelId, textChannels as defaultTextChannels, voiceChannels as defaultVoiceChannels, type TextChannelId, type VoiceChannelId } from "@/config/app";
 import { getAccountRealtimeToken, signOutAccount } from "@/services/auth/account.service";
 import { getPersistedMessages, persistFile, persistMessage } from "@/services/chat/chat.service";
 import { getProfile, uploadProfileAvatar } from "@/services/profile/profile.service";
-import { clearRealtimeSession, getRealtimeToken } from "@/services/realtime/realtimeToken.service";
+import { clearRealtimeSession, getRealtimeToken, restoreRealtimeToken } from "@/services/realtime/realtimeToken.service";
 import { getServerConfiguration as fetchServerConfiguration } from "@/services/server/serverConfig.service";
 import { measureNetworkLatency } from "@/services/network/network.service";
 import type { ChatMessage, ChatTarget, NexusConnectionState, NexusUser, PresenceStatus, ServerConfiguration, TokenSuccess } from "@/types/realtime";
@@ -38,6 +39,26 @@ export interface MediaDeviceLists {
   audiooutput: MediaDeviceInfo[];
 }
 
+export type AudioInputProfile = "voice" | "studio" | "custom";
+
+export interface AudioSettings {
+  inputVolume: number;
+  outputVolume: number;
+  inputProfile: AudioInputProfile;
+  autoGainControl: boolean;
+  noiseSuppression: boolean;
+  echoCancellation: boolean;
+}
+
+export const defaultAudioSettings: AudioSettings = {
+  inputVolume: 100,
+  outputVolume: 100,
+  inputProfile: "voice",
+  autoGainControl: true,
+  noiseSuppression: true,
+  echoCancellation: true,
+};
+
 const emptyDevices: MediaDeviceLists = { audioinput: [], videoinput: [], audiooutput: [] };
 const DM_TOPIC = "chat:dm:v1";
 const FILE_TOPIC = "chat:file:v1";
@@ -45,6 +66,8 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const ACTIVITY_PREFERENCE_KEY = "discord-gurizada:share-activity";
 const NOTIFICATION_SOUND_PREFERENCE_KEY = "discord-gurizada:notification-sound";
 const MENTION_NOTIFICATION_PREFERENCE_KEY = "discord-gurizada:mention-notifications";
+const AUDIO_SETTINGS_KEY = "discord-gurizada:audio-settings";
+const AUDIO_DEVICES_KEY = "discord-gurizada:audio-devices";
 
 function toNexusConnectionState(state: ConnectionState): NexusConnectionState {
   switch (state) {
@@ -86,6 +109,52 @@ function initialMentionNotificationPreference(): boolean {
     return window.localStorage.getItem(MENTION_NOTIFICATION_PREFERENCE_KEY) === "true"
       && (!("Notification" in window) || window.Notification.permission === "granted");
   } catch { return false; }
+}
+
+function clampAudioValue(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : fallback;
+}
+
+function initialAudioSettings(): AudioSettings {
+  if (typeof window === "undefined") return defaultAudioSettings;
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(AUDIO_SETTINGS_KEY) || "null") as Partial<AudioSettings> | null;
+    if (!stored) return defaultAudioSettings;
+    const inputProfile = stored.inputProfile === "studio" || stored.inputProfile === "custom" ? stored.inputProfile : "voice";
+    return {
+      inputVolume: clampAudioValue(stored.inputVolume, defaultAudioSettings.inputVolume),
+      outputVolume: clampAudioValue(stored.outputVolume, defaultAudioSettings.outputVolume),
+      inputProfile,
+      autoGainControl: typeof stored.autoGainControl === "boolean" ? stored.autoGainControl : defaultAudioSettings.autoGainControl,
+      noiseSuppression: typeof stored.noiseSuppression === "boolean" ? stored.noiseSuppression : defaultAudioSettings.noiseSuppression,
+      echoCancellation: typeof stored.echoCancellation === "boolean" ? stored.echoCancellation : defaultAudioSettings.echoCancellation,
+    };
+  } catch {
+    return defaultAudioSettings;
+  }
+}
+
+function initialAudioDevices(): Partial<Record<MediaDeviceKind, string>> {
+  if (typeof window === "undefined") return {};
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(AUDIO_DEVICES_KEY) || "null") as Partial<Record<MediaDeviceKind, string>> | null;
+    return stored && typeof stored === "object" ? stored : {};
+  } catch {
+    return {};
+  }
+}
+
+function audioCaptureOptions(settings: AudioSettings, deviceId?: string): AudioCaptureOptions {
+  const profile = settings.inputProfile === "voice"
+    ? { autoGainControl: true, noiseSuppression: true, echoCancellation: true }
+    : settings.inputProfile === "studio"
+      ? { autoGainControl: false, noiseSuppression: false, echoCancellation: false }
+      : {
+        autoGainControl: settings.autoGainControl,
+        noiseSuppression: settings.noiseSuppression,
+        echoCancellation: settings.echoCancellation,
+      };
+  return { ...profile, ...(deviceId ? { deviceId } : {}) };
 }
 
 function playJoinSound() {
@@ -157,6 +226,8 @@ export function useNexusRealtime() {
   const [notificationSoundEnabled, setNotificationSoundEnabled] = useState(initialNotificationSoundPreference);
   const [mentionNotificationsEnabled, setMentionNotificationsEnabled] = useState(initialMentionNotificationPreference);
   const [devices, setDevices] = useState<MediaDeviceLists>(emptyDevices);
+  const [preferredDevices, setPreferredDevices] = useState<Partial<Record<MediaDeviceKind, string>>>(initialAudioDevices);
+  const [audioSettings, setAudioSettings] = useState<AudioSettings>(initialAudioSettings);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [serverConfig, setServerConfig] = useState<ServerConfiguration>({
     textChannels: defaultTextChannels.map((channel) => ({ ...channel })),
@@ -164,14 +235,20 @@ export function useNexusRealtime() {
   });
   const notificationSoundRef = useRef(notificationSoundEnabled);
   const mentionNotificationsRef = useRef(mentionNotificationsEnabled);
+  const preferredDevicesRef = useRef(preferredDevices);
+  const audioSettingsRef = useRef(audioSettings);
   const userRef = useRef(user);
   const messagesRef = useRef<ChatMessage[]>([]);
   const historyLoadedRef = useRef(false);
+  const lastVoiceActivityAtRef = useRef(0);
+  const afkTransitionRef = useRef(false);
 
   const refresh = useCallback(() => setRevision((value) => value + 1), []);
 
   useEffect(() => { notificationSoundRef.current = notificationSoundEnabled; }, [notificationSoundEnabled]);
   useEffect(() => { mentionNotificationsRef.current = mentionNotificationsEnabled; }, [mentionNotificationsEnabled]);
+  useEffect(() => { preferredDevicesRef.current = preferredDevices; }, [preferredDevices]);
+  useEffect(() => { audioSettingsRef.current = audioSettings; }, [audioSettings]);
   useEffect(() => { userRef.current = user; }, [user]);
 
   const notifyIncomingMessage = useCallback((message: ChatMessage) => {
@@ -362,6 +439,10 @@ export function useNexusRealtime() {
       if (lobbyRoom.state === ConnectionState.Connected && (attributes.microphoneMuted !== microphoneMuted || attributes.screenSharing !== screenSharing)) {
         void lobbyRoom.localParticipant.setAttributes({ microphoneMuted, screenSharing });
       }
+      Array.from(voiceRoom.remoteParticipants.values()).forEach((participant) => {
+        participant.setVolume(audioSettingsRef.current.outputVolume / 100, Track.Source.Microphone);
+        participant.setVolume(audioSettingsRef.current.outputVolume / 100, Track.Source.ScreenShareAudio);
+      });
       refresh();
     };
     const mediaEvents = [
@@ -374,6 +455,32 @@ export function useNexusRealtime() {
     updateVoice();
     return () => { mediaEvents.forEach((event) => voiceRoom.off(event, updateVoice)); };
   }, [lobbyRoom, refresh, voiceRoom]);
+
+  useEffect(() => {
+    if (!voiceRoom || !voiceChannelId || isAfkVoiceChannelId(voiceChannelId)) return;
+    const localIdentity = voiceRoom.localParticipant.identity;
+    const updateSpeechActivity = (speakers: Participant[]) => {
+      if (speakers.some((participant) => participant.identity === localIdentity)) {
+        lastVoiceActivityAtRef.current = Date.now();
+      }
+    };
+    voiceRoom.on(RoomEvent.ActiveSpeakersChanged, updateSpeechActivity);
+    return () => { voiceRoom.off(RoomEvent.ActiveSpeakersChanged, updateSpeechActivity); };
+  }, [voiceChannelId, voiceRoom]);
+
+  useEffect(() => {
+    if (!voiceRoom || !voiceChannelId || isAfkVoiceChannelId(voiceChannelId)) return;
+    const markActivity = () => { lastVoiceActivityAtRef.current = Date.now(); };
+    const activityEvents = ["keydown", "mousedown", "mousemove", "pointerdown", "scroll", "touchstart"] as const;
+    activityEvents.forEach((event) => window.addEventListener(event, markActivity, { passive: true }));
+    window.addEventListener("focus", markActivity);
+    document.addEventListener("visibilitychange", markActivity);
+    return () => {
+      activityEvents.forEach((event) => window.removeEventListener(event, markActivity));
+      window.removeEventListener("focus", markActivity);
+      document.removeEventListener("visibilitychange", markActivity);
+    };
+  }, [voiceChannelId, voiceRoom]);
 
   const members = useMemo<NexusMember[]>(() => {
     void revision;
@@ -458,6 +565,16 @@ export function useNexusRealtime() {
     }
   }, [connectWithCredentials]);
 
+  const restore = useCallback(async () => {
+    setLobbyState("connecting");
+    try {
+      await connectWithCredentials(await restoreRealtimeToken());
+    } catch (cause) {
+      setLobbyState("offline");
+      throw cause;
+    }
+  }, [connectWithCredentials]);
+
   useEffect(() => {
     if (!user) return;
     let active = true;
@@ -495,12 +612,20 @@ export function useNexusRealtime() {
     }
   }, [lobbyRoom]);
 
-  const joinVoice = useCallback(async (channelId: VoiceChannelId) => {
+  const joinVoice = useCallback(async (channelId: VoiceChannelId, options: { muted?: boolean } = {}) => {
     if (voiceChannelId === channelId && voiceRoomRef.current) { await leaveVoice(); return; }
+    const mutedOnEntry = options.muted ?? isAfkVoiceChannelId(channelId);
     setMediaError(null);
     setVoiceState("connecting");
     const credentials = await getRealtimeToken({ action: "voice", channelId });
-    const candidate = new Room({ adaptiveStream: true, dynacast: true });
+    const candidate = new Room({
+      adaptiveStream: true,
+      dynacast: true,
+      audioCaptureDefaults: audioCaptureOptions(audioSettingsRef.current, preferredDevicesRef.current.audioinput),
+      audioOutput: {
+        ...(preferredDevicesRef.current.audiooutput ? { deviceId: preferredDevicesRef.current.audiooutput } : {}),
+      },
+    });
     const previous = voiceRoomRef.current;
     try {
       await candidate.connect(credentials.serverUrl, credentials.participantToken);
@@ -512,8 +637,8 @@ export function useNexusRealtime() {
       setVoiceState("connected");
       playJoinSound();
       try {
-        await candidate.localParticipant.setMicrophoneEnabled(true);
-        await lobbyRoom.localParticipant.setAttributes({ microphoneMuted: "false" });
+        await candidate.localParticipant.setMicrophoneEnabled(!mutedOnEntry);
+        await lobbyRoom.localParticipant.setAttributes({ microphoneMuted: String(mutedOnEntry) });
         refresh();
       } catch { setMediaError("O microfone foi bloqueado. Você entrou no canal com o microfone desligado."); }
     } catch (cause) {
@@ -522,6 +647,20 @@ export function useNexusRealtime() {
       throw cause;
     }
   }, [leaveVoice, lobbyRoom, refresh, voiceChannelId]);
+
+  useEffect(() => {
+    if (!voiceRoom || !voiceChannelId || isAfkVoiceChannelId(voiceChannelId) || voiceState !== "connected") return;
+    let active = true;
+    const checkInactivity = () => {
+      if (!active || afkTransitionRef.current || Date.now() - lastVoiceActivityAtRef.current < AFK_TIMEOUT_MS) return;
+      afkTransitionRef.current = true;
+      void joinVoice(AFK_VOICE_CHANNEL_ID, { muted: true })
+        .catch(() => undefined)
+        .finally(() => { afkTransitionRef.current = false; });
+    };
+    const interval = window.setInterval(checkInactivity, 10_000);
+    return () => { active = false; window.clearInterval(interval); };
+  }, [joinVoice, voiceChannelId, voiceRoom, voiceState]);
 
   const sendMessage = useCallback(async (target: ChatTarget, text: string, kind: "text" | "thread" = "text") => {
     const body = text.trim();
@@ -614,13 +753,14 @@ export function useNexusRealtime() {
   const toggleMicrophone = useCallback(async () => {
     const local = voiceRoomRef.current?.localParticipant;
     if (!local) return;
+    if (isAfkVoiceChannelId(voiceChannelId)) return;
     setMediaError(null);
     try {
       await local.setMicrophoneEnabled(!local.isMicrophoneEnabled);
       await lobbyRoom.localParticipant.setAttributes({ microphoneMuted: String(!local.isMicrophoneEnabled) });
       refresh();
     } catch { setMediaError("Não foi possível acessar o microfone. Verifique a permissão do navegador."); }
-  }, [lobbyRoom, refresh]);
+  }, [lobbyRoom, refresh, voiceChannelId]);
 
   const toggleCamera = useCallback(async () => {
     const local = voiceRoomRef.current?.localParticipant;
@@ -644,6 +784,32 @@ export function useNexusRealtime() {
     }
   }, [lobbyRoom, refresh]);
 
+  const updateAudioSettings = useCallback(async (patch: Partial<AudioSettings>) => {
+    const next = { ...audioSettingsRef.current, ...patch };
+    audioSettingsRef.current = next;
+    setAudioSettings(next);
+    try { window.localStorage.setItem(AUDIO_SETTINGS_KEY, JSON.stringify(next)); }
+    catch { /* Private browsing can disable local storage. */ }
+
+    const room = voiceRoomRef.current;
+    if (!room) return;
+    try {
+      const microphone = Array.from(room.localParticipant.audioTrackPublications.values())
+        .find((publication) => publication.source === Track.Source.Microphone)?.audioTrack;
+      if (microphone && (patch.inputProfile || patch.autoGainControl !== undefined || patch.noiseSuppression !== undefined || patch.echoCancellation !== undefined)) {
+        await microphone.applyConstraints(audioCaptureOptions(next));
+      }
+      if (patch.outputVolume !== undefined) {
+        Array.from(room.remoteParticipants.values()).forEach((participant) => {
+          participant.setVolume(next.outputVolume / 100, Track.Source.Microphone);
+          participant.setVolume(next.outputVolume / 100, Track.Source.ScreenShareAudio);
+        });
+      }
+    } catch {
+      setMediaError("Não foi possível aplicar essa configuração de áudio na chamada atual.");
+    }
+  }, []);
+
   const refreshDevices = useCallback(async () => {
     try {
       const [audioinput, videoinput, audiooutput] = await Promise.all([
@@ -655,6 +821,12 @@ export function useNexusRealtime() {
   }, []);
 
   const switchDevice = useCallback(async (kind: MediaDeviceKind, deviceId: string) => {
+    const nextDevices = { ...preferredDevicesRef.current, [kind]: deviceId };
+    preferredDevicesRef.current = nextDevices;
+    setPreferredDevices(nextDevices);
+    try { window.localStorage.setItem(AUDIO_DEVICES_KEY, JSON.stringify(nextDevices)); }
+    catch { /* Private browsing can disable local storage. */ }
+
     const room = voiceRoomRef.current;
     if (!room) return false;
     try { return await room.switchActiveDevice(kind, deviceId); }
@@ -688,9 +860,9 @@ export function useNexusRealtime() {
     updateActivitySharing,
     updateNotificationSound,
     updateMentionNotifications,
-    mediaError, clearMediaError: () => setMediaError(null), devices,
+    mediaError, clearMediaError: () => setMediaError(null), devices, preferredDevices, audioSettings,
     supportsAudioOutput: typeof document !== "undefined" && supportsAudioOutputSelection(),
-    connect, connectAccount, disconnect, joinVoice, leaveVoice, sendMessage, sendPoll, sendFile, updateProfileAvatar,
-    toggleMicrophone, toggleCamera, toggleScreenShare, refreshDevices, switchDevice,
+    connect, connectAccount, restore, disconnect, joinVoice, leaveVoice, sendMessage, sendPoll, sendFile, updateProfileAvatar,
+    toggleMicrophone, toggleCamera, toggleScreenShare, refreshDevices, switchDevice, updateAudioSettings,
   };
 }

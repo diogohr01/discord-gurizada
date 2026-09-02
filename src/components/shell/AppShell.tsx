@@ -6,6 +6,7 @@ import {
   CrownOutlined,
   DesktopOutlined,
   DisconnectOutlined,
+  LogoutOutlined,
   MenuOutlined,
   MessageOutlined,
   SettingOutlined,
@@ -27,7 +28,7 @@ import { ChatPanel } from "@/components/chat/ChatPanel";
 import { MembersSidebar } from "@/components/members/MembersSidebar";
 import { DeviceSettings } from "@/components/voice/DeviceSettings";
 import { VoiceStage } from "@/components/voice/VoiceStage";
-import type { TextChannelId, VoiceChannelId } from "@/config/app";
+import { isAfkVoiceChannelId, type TextChannelId, type VoiceChannelId } from "@/config/app";
 import { AppAvatar, AppButton, AppIconButton, AppScrollArea, ConnectionStatus, StatusDot } from "@/design-system";
 import type { NexusMember, useNexusRealtime } from "@/hooks/useNexusRealtime";
 import type { ChatTarget, PresenceStatus } from "@/types/realtime";
@@ -144,6 +145,8 @@ export function AppShell({ realtime }: { realtime: Realtime }) {
       <DeviceSettings
         open={settingsOpen}
         devices={realtime.devices}
+        selectedDevices={realtime.preferredDevices}
+        audioSettings={realtime.audioSettings}
         supportsAudioOutput={realtime.supportsAudioOutput}
         presenceStatus={realtime.presenceStatus}
         shareActivity={realtime.shareActivity}
@@ -152,6 +155,7 @@ export function AppShell({ realtime }: { realtime: Realtime }) {
         onClose={() => setSettingsOpen(false)}
         onRefresh={realtime.refreshDevices}
         onChange={realtime.switchDevice}
+        onAudioSettingsChange={realtime.updateAudioSettings}
         onPresence={realtime.updatePresence}
         onActivitySharing={realtime.updateActivitySharing}
         onNotificationSoundChange={realtime.updateNotificationSound}
@@ -265,7 +269,7 @@ function ChannelSidebarContent({ realtime, target, messageCounts, onText, onMemb
           <section className={styles.voiceConnectionPanel}>
             <div className={styles.voiceConnectionTitle}>
               <span className={styles.voiceSignal}><SoundOutlined /></span>
-              <span><strong>{realtime.voiceState === "connected" ? "Voz conectada" : "Conectando…"}</strong><small>{currentVoice?.name}</small></span>
+              <span><strong>{realtime.voiceState === "connected" ? "Voz conectada" : "Conectando…"}</strong><small>{isAfkVoiceChannelId(realtime.voiceChannelId) ? "AFK · microfone bloqueado" : currentVoice?.name}</small></span>
               <AppIconButton label="Desconectar voz" danger icon={<DisconnectOutlined />} onClick={() => void realtime.leaveVoice()} />
             </div>
             <div className={styles.voiceQuickControls}>
@@ -303,9 +307,10 @@ function ChannelSidebarContent({ realtime, target, messageCounts, onText, onMemb
             <span>{realtime.activity || (realtime.voiceChannelId ? "Em voz" : statusItems.find((item) => item.key === realtime.presenceStatus)?.label)}</span>
           </div>
           <div className={styles.currentUserControls}>
-            <AppIconButton disabled={!realtime.voiceRoom} label={realtime.media.microphone ? "Desativar microfone" : "Ativar microfone"} danger={Boolean(realtime.voiceRoom && !realtime.media.microphone)} icon={realtime.media.microphone ? <AudioOutlined /> : <AudioMutedOutlined />} onClick={() => void realtime.toggleMicrophone()} />
+            <AppIconButton disabled={!realtime.voiceRoom || isAfkVoiceChannelId(realtime.voiceChannelId)} label={isAfkVoiceChannelId(realtime.voiceChannelId) ? "Microfone bloqueado no AFK" : realtime.media.microphone ? "Desativar microfone" : "Ativar microfone"} danger={Boolean(realtime.voiceRoom && !realtime.media.microphone && !isAfkVoiceChannelId(realtime.voiceChannelId))} icon={realtime.media.microphone ? <AudioOutlined /> : <AudioMutedOutlined />} onClick={() => void realtime.toggleMicrophone()} />
             <AppIconButton disabled={!realtime.voiceRoom} label={realtime.deafened ? "Ativar áudio remoto" : "Desativar áudio remoto"} active={realtime.deafened} icon={realtime.deafened ? <StopOutlined /> : <SoundOutlined />} onClick={() => realtime.setDeafened(!realtime.deafened)} />
             <AppIconButton label="Configurações" icon={<SettingOutlined />} onClick={onSettings} />
+            <AppIconButton label="Sair do servidor" danger icon={<LogoutOutlined />} onClick={() => void realtime.disconnect()} />
           </div>
         </div>
       </div>

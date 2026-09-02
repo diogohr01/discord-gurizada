@@ -3,6 +3,7 @@
 import {
   ArrowDownOutlined,
   BarChartOutlined,
+  CloseOutlined,
   FileAddOutlined,
   PlusOutlined,
   SendOutlined,
@@ -94,6 +95,12 @@ export function ChatPanel({ target, messages, onSend, onSendFile, onSendPoll, ch
           {emoji}
         </button>
       ))}
+    </div>
+  );
+  const emojiPopoverTitle = (
+    <div className={styles.emojiPopoverHeader}>
+      <span>Emotes</span>
+      <AppIconButton label="Fechar emotes" icon={<CloseOutlined />} onClick={() => setEmojiOpen(false)} />
     </div>
   );
   const visibleMessages = useMemo(() => messages.filter((message) => target.type === "channel"
@@ -195,11 +202,12 @@ export function ChatPanel({ target, messages, onSend, onSendFile, onSendPoll, ch
       <div className={styles.chatComposer}>
         <input ref={fileRef} className={styles.fileInput} type="file" onChange={(event) => void chooseFile(event.target.files?.[0])} />
         <Popover
-          title="Emotes"
+          title={emojiPopoverTitle}
           placement="topLeft"
           trigger={[]}
           open={emojiOpen}
           onOpenChange={setEmojiOpen}
+          destroyOnHidden
           content={emojiPicker}
         >
           <Dropdown

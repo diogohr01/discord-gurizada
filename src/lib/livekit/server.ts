@@ -1,6 +1,7 @@
 import { AccessToken } from "livekit-server-sdk";
+import { TrackSource } from "@livekit/protocol";
 
-import { roomNames, type VoiceChannelId } from "@/config/app";
+import { isAfkVoiceChannelId, roomNames, type VoiceChannelId } from "@/config/app";
 import type { NexusUser } from "@/types/realtime";
 
 function requireLiveKitEnv() {
@@ -17,6 +18,7 @@ async function createToken(
   user: NexusUser,
   roomName: string,
   scope: "lobby" | "voice",
+  voiceChannelId?: VoiceChannelId,
 ) {
   const { serverUrl, apiKey, apiSecret } = requireLiveKitEnv();
   const token = new AccessToken(apiKey, apiSecret, {
@@ -39,6 +41,9 @@ async function createToken(
           roomJoin: true,
           room: roomName,
           canPublish: true,
+          ...(isAfkVoiceChannelId(voiceChannelId) ? {
+            canPublishSources: [TrackSource.CAMERA, TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO],
+          } : {}),
           canSubscribe: true,
           canPublishData: false,
           canUpdateOwnMetadata: false,
@@ -52,5 +57,5 @@ export function createLobbyToken(user: NexusUser) {
 }
 
 export function createVoiceToken(user: NexusUser, channelId: VoiceChannelId) {
-  return createToken(user, roomNames.voice(channelId), "voice");
+  return createToken(user, roomNames.voice(channelId), "voice", channelId);
 }

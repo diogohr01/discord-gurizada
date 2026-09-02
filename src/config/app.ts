@@ -24,6 +24,9 @@ export const voiceChannels = [
   { id: "afk", name: "AFK", icon: "sleep" },
 ] as const satisfies readonly VoiceChannel[];
 
+export const AFK_VOICE_CHANNEL_ID = "afk";
+export const AFK_TIMEOUT_MS = 20 * 60 * 1000;
+
 export type TextChannelId = string;
 export type VoiceChannelId = string;
 
@@ -35,6 +38,10 @@ export const roomNames = {
 
 export function isVoiceChannelId(value: unknown): value is VoiceChannelId {
   return typeof value === "string" && voiceChannels.some((channel) => channel.id === value);
+}
+
+export function isAfkVoiceChannelId(value: unknown): value is VoiceChannelId {
+  return value === AFK_VOICE_CHANNEL_ID;
 }
 
 export function isTextChannelId(value: unknown): value is TextChannelId {

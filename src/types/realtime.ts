@@ -25,6 +25,7 @@ export type PresenceStatus = "online" | "idle" | "dnd" | "invisible";
 export type TokenRequest =
   | { action: "enter"; nickname: string; accessCode: string; adminToken?: string }
   | { action: "account"; accessToken: string }
+  | { action: "restore" }
   | { action: "voice"; channelId: VoiceChannelId };
 
 export interface TokenSuccess {
