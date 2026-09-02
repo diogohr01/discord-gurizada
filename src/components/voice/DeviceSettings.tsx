@@ -189,6 +189,11 @@ function MicrophoneTest({ deviceId, inputVolume }: { deviceId?: string; inputVol
   const streamRef = useRef<MediaStream | null>(null);
   const contextRef = useRef<AudioContext | null>(null);
   const frameRef = useRef<number | null>(null);
+  const inputVolumeRef = useRef(inputVolume);
+
+  useEffect(() => {
+    inputVolumeRef.current = inputVolume;
+  }, [inputVolume]);
 
   const stop = useCallback(() => {
     if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
@@ -214,6 +219,7 @@ function MicrophoneTest({ deviceId, inputVolume }: { deviceId?: string; inputVol
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: deviceId ? { deviceId: { exact: deviceId } } : true });
       const context = new window.AudioContext();
+      await context.resume();
       const source = context.createMediaStreamSource(stream);
       const analyser = context.createAnalyser();
       analyser.fftSize = 256;
@@ -226,7 +232,7 @@ function MicrophoneTest({ deviceId, inputVolume }: { deviceId?: string; inputVol
       const readLevel = () => {
         analyser.getByteTimeDomainData(data);
         const rms = Math.sqrt(data.reduce((sum, sample) => sum + ((sample - 128) / 128) ** 2, 0) / data.length);
-        setLevel(Math.min(100, Math.round(rms * 420 * (inputVolume / 100))));
+        setLevel(Math.min(100, Math.round(rms * 900 * (inputVolumeRef.current / 100))));
         frameRef.current = window.requestAnimationFrame(readLevel);
       };
       readLevel();
