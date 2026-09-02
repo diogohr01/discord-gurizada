@@ -30,7 +30,6 @@ async function readAccountResponse(response: Response) {
   const payload = await response.json() as {
     accessToken?: string | null;
     refreshToken?: string | null;
-    needsConfirmation?: boolean;
     message?: string;
   };
   if (!response.ok) throw new Error(payload.message || "Não foi possível preparar a conta.");
@@ -52,16 +51,7 @@ export async function signUpAccount(email: string, username: string, password: s
     body: JSON.stringify({ email, username, password, accessCode }),
   }));
   if (payload.accessToken && payload.refreshToken) await setBrowserSession(payload.accessToken, payload.refreshToken);
-  return { needsConfirmation: Boolean(payload.needsConfirmation) };
-}
-
-export async function resendSignupConfirmation(email: string) {
-  const { error } = await getBrowserClient().auth.resend({
-    type: "signup",
-    email,
-    options: { emailRedirectTo: siteUrl("/") },
-  });
-  if (error) throw error;
+  return;
 }
 
 export async function signInAccount(username: string, password: string): Promise<string> {

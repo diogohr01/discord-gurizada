@@ -36,10 +36,11 @@ export async function POST(request: Request) {
     if (existing.error) throw existing.error;
     if (existing.data) return failure(409, "USERNAME_TAKEN", "Esse usuário já está sendo usado.");
 
-    const created = await client.auth.signUp({
+    const created = await client.auth.admin.createUser({
       email,
       password,
-      options: { emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/, "") || new URL(request.url).origin}/`, data: { username } },
+      email_confirm: true,
+      user_metadata: { username },
     });
     if (created.error || !created.data.user?.id) {
       return failure(400, "SIGNUP_FAILED", created.error?.message || "Não foi possível criar a conta.");
@@ -58,10 +59,16 @@ export async function POST(request: Request) {
       throw profile.error;
     }
 
+    const authenticated = await client.auth.signInWithPassword({ email, password });
+    if (authenticated.error || !authenticated.data.session) {
+      const cleanup = await client.auth.admin.deleteUser(created.data.user.id);
+      if (cleanup.error) console.error("Account signup session cleanup failed", cleanup.error);
+      throw authenticated.error || new Error("SIGNUP_SESSION_UNAVAILABLE");
+    }
+
     const response = NextResponse.json({
-      needsConfirmation: !created.data.session,
-      accessToken: created.data.session?.access_token || null,
-      refreshToken: created.data.session?.refresh_token || null,
+      accessToken: authenticated.data.session.access_token,
+      refreshToken: authenticated.data.session.refresh_token,
     });
     response.cookies.set(SESSION_COOKIE_NAME, "", { path: "/", maxAge: 0 });
     return response;

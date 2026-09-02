@@ -15,7 +15,7 @@ No Windows com execução de scripts PowerShell bloqueada, use `npm.cmd` e `npx.
 
 Além das credenciais do LiveKit, aplique `supabase/migrations/0001_discord_gurizada.sql` no SQL Editor do Supabase. A migration cria canais persistentes, logs, mensagens, índices, RLS e o bucket privado `chat-files`.
 
-O servidor prefere `SUPABASE_SECRET_KEY` (ou `SUPABASE_SERVICE_ROLE_KEY`, legado). Para cadastro com confirmação de e-mail e login por usuário, defina essa chave no servidor; sem ela o MVP usa a publishable key apenas nos Route Handlers e depende das policies da migration. Nunca exponha uma secret/service key no browser.
+O servidor prefere `SUPABASE_SECRET_KEY` (ou `SUPABASE_SERVICE_ROLE_KEY`, legado). Para cadastro e login por usuário, defina essa chave no servidor; o cadastro confirma a conta diretamente porque o código privado já controla o acesso ao grupo. Nunca exponha uma secret/service key no browser.
 
 1. Copie `.env.example` para `.env.local`.
 2. No painel do LiveKit Cloud, abra as configurações do projeto e copie a URL WebSocket, API Key e API Secret.
