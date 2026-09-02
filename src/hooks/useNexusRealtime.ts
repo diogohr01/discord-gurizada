@@ -775,7 +775,18 @@ export function useNexusRealtime() {
     if (!local) return;
     setMediaError(null);
     try {
-      await local.setScreenShareEnabled(!local.isScreenShareEnabled, { audio: true, contentHint: "motion" });
+      await local.setScreenShareEnabled(
+        !local.isScreenShareEnabled,
+        {
+          audio: true,
+          contentHint: "motion",
+          resolution: { width: 1920, height: 1080, frameRate: 30 },
+        },
+        {
+          screenShareEncoding: { maxBitrate: 5_000_000, maxFramerate: 30 },
+          degradationPreference: "maintain-framerate",
+        },
+      );
       await lobbyRoom.localParticipant.setAttributes({ screenSharing: String(local.isScreenShareEnabled) });
       refresh();
     } catch (cause) {

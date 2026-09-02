@@ -13,14 +13,15 @@ import type { AdminLogEntry, VoiceChannel } from "@/types/realtime";
 
 interface AdminPanelProps {
   open: boolean;
+  initialKind?: "text" | "voice";
   members: NexusMember[];
   voiceChannels: VoiceChannel[];
   onClose: () => void;
   onRefresh: () => Promise<void>;
 }
 
-export function AdminPanel({ open, members, voiceChannels, onClose, onRefresh }: AdminPanelProps) {
-  const [kind, setKind] = useState<"text" | "voice">("text");
+export function AdminPanel({ open, initialKind = "text", members, voiceChannels, onClose, onRefresh }: AdminPanelProps) {
+  const [kind, setKind] = useState<"text" | "voice">(initialKind);
   const [name, setName] = useState("");
   const [logs, setLogs] = useState<AdminLogEntry[]>([]);
   const [busy, setBusy] = useState(false);

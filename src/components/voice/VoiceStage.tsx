@@ -2,7 +2,7 @@
 
 import { AudioMutedOutlined, DesktopOutlined, EyeInvisibleOutlined, EyeOutlined, FullscreenExitOutlined, FullscreenOutlined, PictureOutlined, PushpinOutlined, SoundOutlined, UserOutlined } from "@ant-design/icons";
 import { Slider } from "antd";
-import { RoomAudioRenderer, VideoTrack } from "@livekit/components-react";
+import { VideoTrack } from "@livekit/components-react";
 import { Track, type Participant, type RemoteParticipant, type Room, type TrackPublication } from "livekit-client";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -19,7 +19,7 @@ type FocusTarget =
   | { type: "screen"; id: string }
   | { type: "participant"; id: string };
 
-export function VoiceStage({ room, participants, tracks, deafened }: { room: Room | null; participants: Participant[]; tracks: TrackReference[]; deafened: boolean }) {
+export function VoiceStage({ room, participants, tracks }: { room: Room | null; participants: Participant[]; tracks: TrackReference[] }) {
   const screenTracks = useMemo(() => tracks.filter((item) => item.source === Track.Source.ScreenShare), [tracks]);
   const cameraTracks = useMemo(() => tracks.filter((item) => item.source === Track.Source.Camera), [tracks]);
   const [focusedTarget, setFocusedTarget] = useState<FocusTarget | null>(null);
@@ -91,7 +91,6 @@ export function VoiceStage({ room, participants, tracks, deafened }: { room: Roo
 
   return (
     <div className={styles.voiceStage}>
-      <RoomAudioRenderer room={room} muted={deafened} />
       {hasFocusedContent ? (
         <>
           <div className={`${styles.focusStage} ${showThumbnails ? "" : styles.focusStageExpanded}`} ref={stageRef}>

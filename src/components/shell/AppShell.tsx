@@ -9,6 +9,7 @@ import {
   LogoutOutlined,
   MenuOutlined,
   MessageOutlined,
+  PlusOutlined,
   SettingOutlined,
   SoundOutlined,
   StopOutlined,
@@ -18,6 +19,7 @@ import {
   VideoCameraOutlined,
 } from "@ant-design/icons";
 import { Alert, Drawer, Dropdown } from "antd";
+import { RoomAudioRenderer } from "@livekit/components-react";
 import { useEffect, useMemo, useState } from "react";
 
 import styles from "@/components/nexus.module.css";
@@ -42,6 +44,7 @@ export function AppShell({ realtime }: { realtime: Realtime }) {
   const [membersOpen, setMembersOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [adminCreateKind, setAdminCreateKind] = useState<"text" | "voice">("text");
   const [error, setError] = useState<string | null>(null);
 
   const title = view === "chat"
@@ -93,12 +96,14 @@ export function AppShell({ realtime }: { realtime: Realtime }) {
       onMember={chooseMember}
       onVoice={(channel) => void chooseVoice(channel)}
       onSettings={() => setSettingsOpen(true)}
-      onAdmin={() => setAdminOpen(true)}
+      onCreateChannel={(kind) => { setAdminCreateKind(kind); setAdminOpen(true); }}
+      onAdmin={() => { setAdminCreateKind("text"); setAdminOpen(true); }}
     />
   );
 
   return (
     <main className={styles.appShell}>
+      <RoomAudioRenderer room={realtime.voiceRoom || undefined} muted={realtime.deafened} />
       <aside className={styles.serverRail}>
         <NexusMark compact />
         <span className={styles.railLine} />
@@ -119,7 +124,10 @@ export function AppShell({ realtime }: { realtime: Realtime }) {
           <Alert className={styles.shellAlert} type="warning" showIcon closable={{ onClose: () => { setError(null); realtime.clearMediaError(); } }} title={error || realtime.mediaError} />
         )}
         <div className={styles.mainContent}>
-          {view === "chat" ? (
+          <div className={view === "voice" ? styles.voiceStageContainer : styles.voiceStageContainerHidden} aria-hidden={view !== "voice"}>
+            <VoiceStage room={realtime.voiceRoom} participants={realtime.voiceParticipants} tracks={realtime.videoTracks} />
+          </div>
+          {view === "chat" && (
             <ChatPanel
               key={target.type === "channel" ? target.channelId : target.identity}
               target={target}
@@ -131,8 +139,6 @@ export function AppShell({ realtime }: { realtime: Realtime }) {
               onSendFile={realtime.sendFile}
               onSendPoll={realtime.sendPoll}
             />
-          ) : (
-            <VoiceStage room={realtime.voiceRoom} participants={realtime.voiceParticipants} tracks={realtime.videoTracks} deafened={realtime.deafened} />
           )}
         </div>
       </section>
@@ -165,7 +171,9 @@ export function AppShell({ realtime }: { realtime: Realtime }) {
       />
       {realtime.user?.role === "admin" && (
         <AdminPanel
+          key={adminCreateKind}
           open={adminOpen}
+          initialKind={adminCreateKind}
           members={realtime.members}
           voiceChannels={realtime.voiceChannels}
           onClose={() => setAdminOpen(false)}
@@ -184,10 +192,11 @@ interface ChannelSidebarContentProps {
   onMember: (member: NexusMember) => void;
   onVoice: (id: VoiceChannelId) => void;
   onSettings: () => void;
+  onCreateChannel: (kind: "text" | "voice") => void;
   onAdmin: () => void;
 }
 
-function ChannelSidebarContent({ realtime, target, messageCounts, onText, onMember, onVoice, onSettings, onAdmin }: ChannelSidebarContentProps) {
+function ChannelSidebarContent({ realtime, target, messageCounts, onText, onMember, onVoice, onSettings, onCreateChannel, onAdmin }: ChannelSidebarContentProps) {
   const [seenCounts, setSeenCounts] = useState<Record<string, number>>({});
   const directMembers = realtime.members.filter((member) => member.identity !== realtime.user?.identity);
   const currentVoice = realtime.voiceChannels.find((channel) => channel.id === realtime.voiceChannelId);
@@ -218,7 +227,10 @@ function ChannelSidebarContent({ realtime, target, messageCounts, onText, onMemb
       </header>
       <AppScrollArea className={styles.channelsScroll}>
         <div className={styles.channelSection}>
-          <div className={styles.sectionLabel}>TEXTO</div>
+          <div className={styles.sectionLabelWithAction}>
+            <span className={styles.sectionLabel}>TEXTO</span>
+            {realtime.user?.role === "admin" && <AppIconButton label="Criar canal de texto" icon={<PlusOutlined />} onClick={() => onCreateChannel("text")} />}
+          </div>
           {realtime.textChannels.map((channel) => (
             <TextChannelItem
               key={channel.id}
@@ -233,7 +245,10 @@ function ChannelSidebarContent({ realtime, target, messageCounts, onText, onMemb
           ))}
         </div>
         <div className={styles.channelSection}>
-          <div className={styles.sectionLabel}>VOZ</div>
+          <div className={styles.sectionLabelWithAction}>
+            <span className={styles.sectionLabel}>VOZ</span>
+            {realtime.user?.role === "admin" && <AppIconButton label="Criar canal de voz" icon={<PlusOutlined />} onClick={() => onCreateChannel("voice")} />}
+          </div>
           {realtime.voiceChannels.map((channel) => (
             <VoiceChannelItem
               key={channel.id}
