@@ -101,6 +101,7 @@ export function DeviceSettings({
         key={selectedDevices.audioinput || "default"}
         deviceId={selectedDevices.audioinput}
         inputVolume={audioSettings.inputVolume}
+        outputVolume={audioSettings.outputVolume}
       />
 
       <div className={styles.settingsVolumeGrid}>
@@ -181,7 +182,7 @@ function PreferenceToggle({ icon, title, description, checked, onChange, ariaLab
   return <div className={styles.activityPreference}><span className={styles.activityPreferenceIcon}>{icon}</span><span className={styles.activityPreferenceText}><strong>{title}</strong><small>{description}</small></span><Switch aria-label={ariaLabel} checked={checked} onChange={onChange} /></div>;
 }
 
-function MicrophoneTest({ deviceId, inputVolume }: { deviceId?: string; inputVolume: number }) {
+function MicrophoneTest({ deviceId, inputVolume, outputVolume }: { deviceId?: string; inputVolume: number; outputVolume: number }) {
   const [recording, setRecording] = useState(false);
   const [requesting, setRequesting] = useState(false);
   const [level, setLevel] = useState(0);
@@ -190,16 +191,24 @@ function MicrophoneTest({ deviceId, inputVolume }: { deviceId?: string; inputVol
   const contextRef = useRef<AudioContext | null>(null);
   const frameRef = useRef<number | null>(null);
   const inputVolumeRef = useRef(inputVolume);
+  const outputVolumeRef = useRef(outputVolume);
+  const monitorGainRef = useRef<GainNode | null>(null);
 
   useEffect(() => {
     inputVolumeRef.current = inputVolume;
-  }, [inputVolume]);
+    outputVolumeRef.current = outputVolume;
+    const context = contextRef.current;
+    const gain = monitorGainRef.current;
+    if (context && gain) gain.gain.setTargetAtTime((inputVolume / 100) * (outputVolume / 100), context.currentTime, 0.02);
+  }, [inputVolume, outputVolume]);
 
   const stop = useCallback(() => {
     if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
     frameRef.current = null;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+    monitorGainRef.current?.disconnect();
+    monitorGainRef.current = null;
     const context = contextRef.current;
     contextRef.current = null;
     if (context) void context.close();
@@ -222,11 +231,16 @@ function MicrophoneTest({ deviceId, inputVolume }: { deviceId?: string; inputVol
       await context.resume();
       const source = context.createMediaStreamSource(stream);
       const analyser = context.createAnalyser();
+      const monitorGain = context.createGain();
       analyser.fftSize = 256;
       source.connect(analyser);
+      source.connect(monitorGain);
+      monitorGain.gain.value = (inputVolumeRef.current / 100) * (outputVolumeRef.current / 100);
+      monitorGain.connect(context.destination);
       const data = new Uint8Array(analyser.fftSize);
       streamRef.current = stream;
       contextRef.current = context;
+      monitorGainRef.current = monitorGain;
       setRequesting(false);
       setRecording(true);
       const readLevel = () => {
@@ -242,5 +256,5 @@ function MicrophoneTest({ deviceId, inputVolume }: { deviceId?: string; inputVol
     }
   }
 
-  return <section className={styles.microphoneTest} aria-labelledby="microphone-test-title"><div className={styles.microphoneTestHeader}><div><h3 id="microphone-test-title">Teste do microfone</h3><p>Fale normalmente. O medidor mostra se sua voz está chegando bem.</p></div><AppButton aria-label={recording ? "Parar teste do microfone" : "Testar microfone"} variant={recording ? "secondary" : "primary"} icon={recording ? <StopOutlined /> : <AudioOutlined />} loading={requesting} onClick={() => recording ? stop() : void start()}>{recording ? "Parar teste" : "Testar microfone"}</AppButton></div><div className={styles.micMeter} aria-label={`Nível do microfone: ${level}%`} role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={level}>{Array.from({ length: 32 }, (_, index) => { const threshold = ((index + 1) / 32) * 100; return <span key={index} className={threshold <= level ? styles.micMeterActive : ""} />; })}</div>{error && <small className={styles.settingsError}>{error}</small>}<p className={styles.settingsNote}>O teste é local e não transmite nem grava sua voz.</p></section>;
+  return <section className={styles.microphoneTest} aria-labelledby="microphone-test-title"><div className={styles.microphoneTestHeader}><div><h3 id="microphone-test-title">Teste do microfone</h3><p>Fale normalmente. Você ouvirá sua voz e verá o medidor responder.</p></div><AppButton aria-label={recording ? "Parar teste do microfone" : "Testar microfone"} variant={recording ? "secondary" : "primary"} icon={recording ? <StopOutlined /> : <AudioOutlined />} loading={requesting} onClick={() => recording ? stop() : void start()}>{recording ? "Parar teste" : "Testar microfone"}</AppButton></div><div className={styles.micMeter} aria-label={`Nível do microfone: ${level}%`} role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={level}>{Array.from({ length: 32 }, (_, index) => { const threshold = ((index + 1) / 32) * 100; return <span key={index} className={threshold <= level ? styles.micMeterActive : ""} />; })}</div>{error && <small className={styles.settingsError}>{error}</small>}<p className={styles.settingsNote}>Use fones para evitar microfonia. O teste é local e não transmite nem grava sua voz.</p></section>;
 }
