@@ -26,13 +26,15 @@ export async function POST(request: Request) {
       return failure(401, "ACCESS_DENIED", "Usuário, senha ou código de acesso inválido.");
     }
 
-    const client = createSupabaseDataClient();
     const hasServerKey = Boolean(process.env.SUPABASE_SECRET_KEY?.trim() || process.env.SUPABASE_SERVICE_ROLE_KEY?.trim());
-    if (hasServerKey) {
-      const existing = await client.from("users").select("id").eq("username_key", normalizeUsernameKey(username)).maybeSingle();
-      if (existing.error) throw existing.error;
-      if (existing.data) return failure(409, "USERNAME_TAKEN", "Esse usuário já está sendo usado.");
+    if (!hasServerKey) {
+      return failure(503, "SERVER_MISCONFIGURED", "O cadastro de contas exige SUPABASE_SECRET_KEY configurada no servidor.");
     }
+
+    const client = createSupabaseDataClient();
+    const existing = await client.from("users").select("id").eq("username_key", normalizeUsernameKey(username)).maybeSingle();
+    if (existing.error) throw existing.error;
+    if (existing.data) return failure(409, "USERNAME_TAKEN", "Esse usuário já está sendo usado.");
 
     const created = await client.auth.signUp({
       email,
@@ -43,16 +45,15 @@ export async function POST(request: Request) {
       return failure(400, "SIGNUP_FAILED", created.error?.message || "Não foi possível criar a conta.");
     }
 
-    const profileClient = created.data.session
-      ? createSupabaseDataClient(created.data.session.access_token)
-      : client;
-    const profile = await profileClient.from("users").insert({
+    const profile = await client.from("users").insert({
       id: created.data.user.id,
       email,
       username,
       updated_at: new Date().toISOString(),
     }).select("id, username, email").single();
     if (profile.error) {
+      const cleanup = await client.auth.admin.deleteUser(created.data.user.id);
+      if (cleanup.error) console.error("Account signup cleanup failed", cleanup.error);
       if (profile.error.code === "23505") return failure(409, "USERNAME_TAKEN", "Esse usuário já está sendo usado.");
       throw profile.error;
     }
