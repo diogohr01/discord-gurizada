@@ -103,7 +103,7 @@ export function AppShell({ realtime }: { realtime: Realtime }) {
 
   return (
     <main className={styles.appShell}>
-      <RoomAudioRenderer room={realtime.voiceRoom || undefined} muted={realtime.deafened} />
+      {realtime.voiceRoom && <RoomAudioRenderer room={realtime.voiceRoom} muted={realtime.deafened} />}
       <aside className={styles.serverRail}>
         <NexusMark compact />
         <span className={styles.railLine} />
